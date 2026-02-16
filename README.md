@@ -1,4 +1,4 @@
-# Qubic.Net Wallet
+# Qubic.NET Wallet
 
 Cross-platform desktop wallet for the [Qubic](https://qubic.org) network. Runs as a native desktop window via [Photino.Blazor](https://github.com/AhLamm/photino.Blazor), or as a Blazor Server app in the browser with `--server`.
 
@@ -17,6 +17,8 @@ Cross-platform desktop wallet for the [Qubic](https://qubic.org) network. Runs a
 - **Transaction History** — full history with local encrypted storage and sync
 - **Sign / Verify** — sign messages with your seed and verify signatures
 - **Settings** — backend selection (RPC / Bob / Direct TCP), peer management, label sources, database import/export
+
+<img width="1800" height="1400" alt="wallet-architecture" src="https://github.com/user-attachments/assets/ae1e3f7a-28df-44cc-8f79-4e7cc560b389" />
 
 ## Running Pre-Built Releases
 
@@ -147,3 +149,6 @@ Produces zip archives with SHA-256 hashes for:
 - **Storage**: SQLCipher-encrypted SQLite per identity
 - **Backends**: RPC, Bob, or direct TCP to Qubic nodes
 - **Libraries**: [Qubic.Net](https://github.com/qubic/Qubic.Net) included as a git submodule under `deps/`
+
+## Screenshots
+<img width="1182" height="636" alt="image" src="https://github.com/user-attachments/assets/2667aa4a-aeee-4f61-9308-e0790fff6837" />
