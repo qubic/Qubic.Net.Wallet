@@ -8,6 +8,7 @@
 @inject QubicSettingsService Settings
 @inject QubicStaticService StaticData
 @inject AssetRegistryService AssetRegistry
+@inject VaultService Vault
 @inject NavigationManager Nav
 @inject LabelService Labels
 @inject IJSRuntime JS
@@ -19,23 +20,95 @@
             <span>Wallet</span>
         </a>
         <div class="qb-controls">
-            @if (Seed.HasSeed)
+            @if (Vault.IsUnlocked && Seed.HasSeed)
             {
+                @* ── Vault unlocked, seed active ── *@
+                <span class="badge-qb-gold">
+                    <i class="bi bi-shield-lock-fill me-1"></i>@(Seed.ActiveLabel ?? "Vault")
+                </span>
+                @if (Vault.Entries.Count > 1)
+                {
+                    <select class="form-select form-select-sm mono" style="width:auto;max-width:220px"
+                            value="@Seed.Identity?.ToString()"
+                            @onchange="OnIdentitySwitched">
+                        @foreach (var entry in Vault.Entries)
+                        {
+                            <option value="@entry.Identity">@entry.Label (@entry.Identity[..8]...)</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <span class="badge-qb-cyan mono">@Seed.Identity?.ToString()[..12]...</span>
+                }
+                <button class="btn btn-sm btn-qb-ghost p-0 ms-1" @onclick="CopyIdentity"
+                        title="Copy full identity">
+                    <i class="bi @(_identityCopied ? "bi-check-lg text-success" : "bi-clipboard")"></i>
+                </button>
+                <button class="btn btn-sm btn-qb-ghost" @onclick="LockVault"
+                        title="Lock vault and clear seed">
+                    <i class="bi bi-lock me-1"></i>Lock
+                </button>
+            }
+            else if (Vault.VaultConfigured && !Vault.IsUnlocked && !_showDirectSeedInput)
+            {
+                @* ── Vault configured, locked ── *@
+                <input type="password" class="form-control form-control-sm"
+                       style="width:220px" placeholder="Vault password..."
+                       @bind="_vaultPassword" @bind:event="oninput"
+                       @onkeydown="OnVaultPasswordKeyDown" />
+                <button class="btn btn-sm btn-qb-primary" @onclick="UnlockVault"
+                        disabled="@(string.IsNullOrEmpty(_vaultPassword))">
+                    <i class="bi bi-unlock me-1"></i>Unlock Vault
+                </button>
+                @if (_vaultError != null)
+                {
+                    <span class="text-danger small">@_vaultError</span>
+                }
+                <button class="btn btn-sm btn-qb-ghost" @onclick="() => _showDirectSeedInput = true"
+                        title="Enter seed without vault">
+                    <i class="bi bi-key me-1"></i>Use seed directly
+                </button>
+            }
+            else if (Seed.HasSeed && !Vault.IsUnlocked)
+            {
+                @* ── No vault (or bypassed), seed active ── *@
                 <span class="badge-qb-gold">Seed active</span>
                 <span class="badge-qb-cyan mono">@Seed.Identity?.ToString()[..12]...</span>
                 <button class="btn btn-sm btn-qb-ghost p-0 ms-1" @onclick="CopyIdentity"
                         title="Copy full identity">
                     <i class="bi @(_identityCopied ? "bi-check-lg text-success" : "bi-clipboard")"></i>
                 </button>
-                <button class="btn btn-sm btn-qb-ghost" @onclick="ClearSeed">Clear</button>
+                @if (!Vault.VaultConfigured)
+                {
+                    <button class="btn btn-sm btn-qb-ghost" @onclick="() => _showSaveToVault = true"
+                            title="Save this seed to a vault">
+                        <i class="bi bi-shield-plus me-1"></i>Save to Vault
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-qb-ghost" @onclick="() => _showAddToVault = true"
+                            title="Add this seed to the existing vault">
+                        <i class="bi bi-shield-plus me-1"></i>Add to Vault
+                    </button>
+                }
+                <button class="btn btn-sm btn-qb-ghost" @onclick="ClearSeedAndResetBypass">Clear</button>
             }
             else
             {
+                @* ── No seed ── *@
                 <input type="password" class="form-control form-control-sm"
                        style="width:280px" placeholder="Enter 55-char seed to enable signing..."
                        @bind="_seedInput" @bind:event="oninput" />
                 <button class="btn btn-sm btn-qb-primary" @onclick="SetSeed"
                         disabled="@(_seedInput?.Length != 55)">Unlock</button>
+                @if (_showDirectSeedInput && Vault.VaultConfigured)
+                {
+                    <button class="btn btn-sm btn-qb-ghost" @onclick="() => _showDirectSeedInput = false">
+                        Back to vault
+                    </button>
+                }
             }
             <div class="qb-divider"></div>
             <select class="form-select form-select-sm" style="width:auto"
@@ -78,7 +151,15 @@
     @if (Seed.HasSeed)
     {
         <div class="qb-seed-bar">
-            Your seed is held in memory for this session. Clear it when done.
+            @if (Vault.IsUnlocked)
+            {
+                <i class="bi bi-shield-lock-fill me-1"></i>
+                @:Vault unlocked with @Vault.Entries.Count identity(ies). Lock when done.
+            }
+            else
+            {
+                @:Your seed is held in memory for this session. Clear it when done.
+            }
         </div>
     }
     <div class="d-flex flex-grow-1 overflow-hidden">
@@ -89,11 +170,129 @@
     </div>
 </div>
 
+@* ── Save-to-Vault Modal ── *@
+@if (_showSaveToVault && Seed.HasSeed)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="bi bi-shield-plus me-2"></i>Save Seed to Vault</h6>
+                    <button type="button" class="btn-close" @onclick="CloseSaveToVault"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">Vault File Location</label>
+                        <input type="text" class="form-control form-control-sm"
+                               placeholder="Path to save vault file..."
+                               @bind="_saveVaultPath" />
+                        <div class="form-text">Choose where to save your encrypted vault file.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Label for this seed</label>
+                        <input type="text" class="form-control form-control-sm"
+                               placeholder="e.g. Main, Trading, Savings"
+                               @bind="_saveVaultLabel" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Vault Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_saveVaultPassword" @bind:event="oninput" />
+                        @{ var pwHint = VaultService.ValidatePassword(_saveVaultPassword); }
+                        @if (!string.IsNullOrEmpty(_saveVaultPassword) && pwHint != null)
+                        {
+                            <div class="text-warning small mt-1">@pwHint</div>
+                        }
+                        <div class="form-text">Min 12 chars, uppercase, lowercase, digit, and special character.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Confirm Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_saveVaultPasswordConfirm" @bind:event="oninput" />
+                        @if (!string.IsNullOrEmpty(_saveVaultPasswordConfirm) && _saveVaultPassword != _saveVaultPasswordConfirm)
+                        {
+                            <div class="text-warning small mt-1">Passwords do not match.</div>
+                        }
+                    </div>
+                    @if (_saveVaultError != null)
+                    {
+                        <div class="alert alert-danger small py-1">@_saveVaultError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CloseSaveToVault">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="SaveCurrentSeedToVault">
+                        <i class="bi bi-shield-plus me-1"></i>Create Vault
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Add-to-Vault Modal (when vault already exists) ── *@
+@if (_showAddToVault && Seed.HasSeed && Vault.VaultConfigured)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="bi bi-shield-plus me-2"></i>Add Seed to Vault</h6>
+                    <button type="button" class="btn-close" @onclick="CloseAddToVault"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">Label for this seed</label>
+                        <input type="text" class="form-control form-control-sm"
+                               placeholder="e.g. Main, Trading, Savings"
+                               @bind="_addToVaultLabel" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Vault Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               placeholder="Enter your vault password to unlock and add..."
+                               @bind="_addToVaultPassword" @bind:event="oninput" />
+                    </div>
+                    @if (_addToVaultError != null)
+                    {
+                        <div class="alert alert-danger small py-1">@_addToVaultError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CloseAddToVault">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="AddCurrentSeedToVault">
+                        <i class="bi bi-shield-plus me-1"></i>Add to Vault
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string? _seedInput;
     private bool _reconnecting;
     private bool _disposed;
     private bool _identityCopied;
+
+    // Vault state
+    private string? _vaultPassword;
+    private string? _vaultError;
+    private bool _showDirectSeedInput;
+
+    // Save-to-vault modal (new vault)
+    private bool _showSaveToVault;
+    private string _saveVaultPath = "";
+    private string _saveVaultLabel = "";
+    private string _saveVaultPassword = "";
+    private string _saveVaultPasswordConfirm = "";
+    private string? _saveVaultError;
+
+    // Add-to-vault modal (existing vault)
+    private bool _showAddToVault;
+    private string _addToVaultLabel = "";
+    private string _addToVaultPassword = "";
+    private string? _addToVaultError;
 
     private string CurrentHost
     {
@@ -104,6 +303,7 @@
     protected override async Task OnInitializedAsync()
     {
         TickMonitor.OnTickChanged += OnTickChanged;
+        Vault.OnVaultChanged += OnVaultChanged;
         await TickMonitor.StartAsync();
 
         if (Settings.RemoteLabelsEnabled)
@@ -111,6 +311,9 @@
 
         // Auto-refresh asset registry if stale (once per day)
         _ = AssetRegistry.RefreshFromNetworkAsync(Backend);
+
+        // Default vault path for save dialog
+        _saveVaultPath = Path.Combine(Settings.StorageDirectory, "vault.dat");
     }
 
     private void OnTickChanged()
@@ -119,6 +322,14 @@
         InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
     }
 
+    private void OnVaultChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    }
+
+    // ── Seed (direct entry) ──
+
     private void SetSeed()
     {
         if (_seedInput?.Length == 55)
@@ -126,13 +337,210 @@
             try
             {
                 Seed.SetSeed(_seedInput);
-                WalletStorage.SetSeed(_seedInput, Seed.Identity!.Value.ToString());
+                WalletStorage.SetSeed(_seedInput, Seed.Identity!.Value.ToString(), TickMonitor.Epoch);
                 TxTracker.SetEncryptionKey(_seedInput);
                 _seedInput = null;
             }
             catch { }
         }
     }
+
+    private void ClearSeed()
+    {
+        Seed.ClearSeed();
+        WalletStorage.ClearSeed();
+        TxTracker.ClearEncryptionKey();
+        _seedInput = null;
+        Nav.NavigateTo("/", forceLoad: false);
+    }
+
+    private void ClearSeedAndResetBypass()
+    {
+        _showDirectSeedInput = false;
+        ClearSeed();
+    }
+
+    // ── Vault ──
+
+    private void UnlockVault()
+    {
+        if (string.IsNullOrEmpty(_vaultPassword)) return;
+        _vaultError = null;
+
+        var unlockError = Vault.UnlockVault(_vaultPassword);
+        if (unlockError != null)
+        {
+            _vaultError = unlockError;
+            return;
+        }
+
+        _vaultPassword = null;
+
+        // Auto-activate
+        var entries = Vault.Entries;
+        if (entries.Count == 0) return;
+
+        VaultEntry? toActivate;
+        if (entries.Count == 1)
+        {
+            toActivate = entries[0];
+        }
+        else
+        {
+            var lastIdentity = Settings.GetCustom<string>("vault_last_identity");
+            toActivate = entries.FirstOrDefault(e => e.Identity == lastIdentity) ?? entries[0];
+        }
+
+        ActivateVaultEntry(toActivate);
+    }
+
+    private void OnVaultPasswordKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") UnlockVault();
+    }
+
+    private void LockVault()
+    {
+        ClearSeed();
+        Vault.LockVault();
+    }
+
+    private void OnIdentitySwitched(ChangeEventArgs e)
+    {
+        var identity = e.Value?.ToString();
+        if (identity == null) return;
+        var entry = Vault.GetEntry(identity);
+        if (entry != null) ActivateVaultEntry(entry);
+    }
+
+    private void ActivateVaultEntry(VaultEntry entry)
+    {
+        try
+        {
+            Seed.SetSeed(entry.Seed, entry.Label);
+            WalletStorage.SetSeed(entry.Seed, entry.Identity, TickMonitor.Epoch);
+            TxTracker.SetEncryptionKey(entry.Seed);
+            Settings.SetCustom("vault_last_identity", entry.Identity);
+            _seedInput = null;
+        }
+        catch { }
+    }
+
+    // ── Save to vault ──
+
+    private void SaveCurrentSeedToVault()
+    {
+        _saveVaultError = null;
+
+        if (string.IsNullOrWhiteSpace(_saveVaultPath))
+        {
+            _saveVaultError = "File location is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_saveVaultLabel))
+        {
+            _saveVaultError = "Label is required.";
+            return;
+        }
+        var pwError = VaultService.ValidatePassword(_saveVaultPassword);
+        if (pwError != null)
+        {
+            _saveVaultError = pwError;
+            return;
+        }
+        if (_saveVaultPassword != _saveVaultPasswordConfirm)
+        {
+            _saveVaultError = "Passwords do not match.";
+            return;
+        }
+
+        try
+        {
+            var seed = Seed.GetSeedForVault();
+            var entries = new List<VaultEntry>
+            {
+                new() { Label = _saveVaultLabel, Seed = seed }
+            };
+            Vault.CreateVault(_saveVaultPath, _saveVaultPassword, entries);
+
+            // Re-activate through vault path
+            Seed.SetSeed(seed, _saveVaultLabel);
+
+            CloseSaveToVault();
+        }
+        catch (Exception ex)
+        {
+            _saveVaultError = ex.Message;
+        }
+    }
+
+    private void CloseSaveToVault()
+    {
+        _showSaveToVault = false;
+        _saveVaultLabel = "";
+        _saveVaultPassword = "";
+        _saveVaultPasswordConfirm = "";
+        _saveVaultError = null;
+    }
+
+    // ── Add to existing vault ──
+
+    private void AddCurrentSeedToVault()
+    {
+        _addToVaultError = null;
+
+        if (string.IsNullOrWhiteSpace(_addToVaultLabel))
+        {
+            _addToVaultError = "Label is required.";
+            return;
+        }
+        if (string.IsNullOrEmpty(_addToVaultPassword))
+        {
+            _addToVaultError = "Password is required.";
+            return;
+        }
+
+        try
+        {
+            var seed = Seed.GetSeedForVault();
+
+            // Unlock the vault if needed
+            if (!Vault.IsUnlocked)
+            {
+                var err = Vault.UnlockVault(_addToVaultPassword);
+                if (err != null)
+                {
+                    _addToVaultError = err;
+                    return;
+                }
+            }
+
+            // Add the current seed
+            Vault.AddEntry(_addToVaultLabel, seed);
+
+            // Re-activate through vault so we're now in vault mode
+            var entry = Vault.GetEntry(Seed.Identity!.Value.ToString());
+            if (entry != null)
+                ActivateVaultEntry(entry);
+
+            _showDirectSeedInput = false;
+            CloseAddToVault();
+        }
+        catch (Exception ex)
+        {
+            _addToVaultError = ex.Message;
+        }
+    }
+
+    private void CloseAddToVault()
+    {
+        _showAddToVault = false;
+        _addToVaultLabel = "";
+        _addToVaultPassword = "";
+        _addToVaultError = null;
+    }
+
+    // ── Identity ──
 
     private async Task CopyIdentity()
     {
@@ -145,14 +553,7 @@
         _identityCopied = false;
     }
 
-    private void ClearSeed()
-    {
-        Seed.ClearSeed();
-        WalletStorage.ClearSeed();
-        TxTracker.ClearEncryptionKey();
-        _seedInput = null;
-        Nav.NavigateTo("/", forceLoad: false);
-    }
+    // ── Backend ──
 
     private async Task OnBackendChanged()
     {
@@ -190,5 +591,6 @@
     {
         _disposed = true;
         TickMonitor.OnTickChanged -= OnTickChanged;
+        Vault.OnVaultChanged -= OnVaultChanged;
     }
 }

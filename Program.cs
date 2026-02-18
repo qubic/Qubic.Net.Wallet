@@ -50,6 +50,7 @@ class Program
         services.AddSingleton(new QubicSettingsService("QubicWallet"));
         services.AddSingleton<QubicBackendService>();
         services.AddSingleton<SeedSessionService>();
+        services.AddSingleton<VaultService>();
         services.AddSingleton<TickMonitorService>();
         services.AddSingleton<WalletDatabase>();
         services.AddSingleton<WalletSyncService>();

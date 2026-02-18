@@ -6,10 +6,38 @@
 @inject Qubic.Services.Storage.WalletStorageService WalletStorage
 @inject TransactionTrackerService TxTracker
 @inject IJSRuntime JS
+@inject VaultService Vault
+@inject QubicSettingsService Settings
 
 <h4>Welcome to Qubic.Net Wallet</h4>
 
-@if (!Seed.HasSeed)
+@if (Vault.IsUnlocked && !Seed.HasSeed)
+{
+    <div class="row">
+        <div class="col-12">
+            <h5>Select an Identity</h5>
+            <p class="text-muted">Your vault is unlocked. Choose an identity to activate.</p>
+        </div>
+        @foreach (var entry in Vault.Entries)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-person-circle display-4 text-primary mb-2 d-block"></i>
+                        <h6>@entry.Label</h6>
+                        <span class="mono small text-muted">@entry.Identity[..12]...</span>
+                    </div>
+                    <div class="card-footer text-center">
+                        <button class="btn btn-primary btn-sm" @onclick="() => ActivateFromHome(entry)">
+                            <i class="bi bi-unlock me-1"></i>Activate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (!Seed.HasSeed)
 {
     <div class="row">
         <div class="col-md-6">
@@ -82,6 +110,14 @@
 }
 else
 {
+    @if (!Vault.VaultConfigured)
+    {
+        <div class="alert alert-info small py-2 mb-3">
+            <i class="bi bi-lightbulb me-1"></i>
+            <strong>Tip:</strong> You can save this seed to a password-protected vault from the toolbar above.
+        </div>
+    }
+
     @* ── Identity + Balance + Network ── *@
     <div class="card mb-3">
         <div class="card-body">
@@ -455,13 +491,25 @@ else
         _seedCopied = false;
     }
 
+    private void ActivateFromHome(VaultEntry entry)
+    {
+        try
+        {
+            Seed.SetSeed(entry.Seed, entry.Label);
+            WalletStorage.SetSeed(entry.Seed, entry.Identity, TickMonitor.Epoch);
+            TxTracker.SetEncryptionKey(entry.Seed);
+            Settings.SetCustom("vault_last_identity", entry.Identity);
+        }
+        catch { }
+    }
+
     private void UseGeneratedSeed()
     {
         if (_generatedSeed == null || !_seedSavedConfirmed) return;
         try
         {
             Seed.SetSeed(_generatedSeed);
-            WalletStorage.SetSeed(_generatedSeed, Seed.Identity!.Value.ToString());
+            WalletStorage.SetSeed(_generatedSeed, Seed.Identity!.Value.ToString(), TickMonitor.Epoch);
             TxTracker.SetEncryptionKey(_generatedSeed);
             _generatedSeed = null;
             _seedSavedConfirmed = false;

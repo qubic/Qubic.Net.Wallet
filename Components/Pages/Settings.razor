@@ -6,6 +6,8 @@
 @inject Qubic.Services.Storage.WalletStorageService WalletStorage
 @inject SeedSessionService Seed
 @inject IJSRuntime JS
+@inject VaultService Vault
+@inject TransactionTrackerService TxTracker
 
 <h4>Settings</h4>
 <p class="text-muted">Configure Qubic.Net Wallet behavior.</p>
@@ -34,6 +36,11 @@
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "data" ? "active" : "")" href="" @onclick="@(() => SetTab("data"))" @onclick:preventDefault>
             <i class="bi bi-database me-1"></i>Data
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(_activeTab == "vault" ? "active" : "")" href="" @onclick="@(() => SetTab("vault"))" @onclick:preventDefault>
+            <i class="bi bi-shield-lock me-1"></i>Vault
         </a>
     </li>
 </ul>
@@ -272,6 +279,258 @@ else if (_activeTab == "data")
         }
     </div></div>
 }
+else if (_activeTab == "vault")
+{
+    <div class="row"><div class="col-md-8">
+        @if (!Vault.VaultConfigured)
+        {
+            <div class="alert alert-info py-2 mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                No vault configured. Create a new vault or open an existing vault file.
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">Create New Vault</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Vault File Location</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_vaultCreatePath" placeholder="Path to save vault file..." />
+                        <div class="form-text">Choose where to save your encrypted vault file.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Seed (55 characters)</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultCreateSeed" placeholder="Enter 55-char seed..." />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Label</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_vaultCreateLabel" placeholder="e.g. Main" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultCreatePassword" @bind:event="oninput" />
+                        @{ var cpwHint = VaultService.ValidatePassword(_vaultCreatePassword); }
+                        @if (!string.IsNullOrEmpty(_vaultCreatePassword) && cpwHint != null)
+                        {
+                            <div class="text-warning small mt-1">@cpwHint</div>
+                        }
+                        <div class="form-text">Min 12 chars, uppercase, lowercase, digit, and special character.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Confirm Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultCreatePasswordConfirm" />
+                    </div>
+                    @if (_vaultCreateError != null)
+                    {
+                        <div class="text-danger small mb-2">@_vaultCreateError</div>
+                    }
+                    <button class="btn btn-primary btn-sm" @onclick="CreateVaultFromSettings">
+                        <i class="bi bi-shield-plus me-1"></i>Create Vault
+                    </button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">Open Existing Vault</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Vault File Path</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_vaultOpenPath" placeholder="Path to existing vault file..." />
+                    </div>
+                    @if (_vaultOpenError != null)
+                    {
+                        <div class="text-danger small mb-2">@_vaultOpenError</div>
+                    }
+                    <button class="btn btn-outline-primary btn-sm" @onclick="OpenExistingVault">
+                        <i class="bi bi-folder2-open me-1"></i>Open Vault
+                    </button>
+                </div>
+            </div>
+        }
+        else if (Vault.IsUnlocked)
+        {
+            <div class="alert alert-success py-2 mb-3">
+                <i class="bi bi-unlock me-1"></i>
+                Vault is unlocked. File: <code>@Vault.VaultPath</code>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Vault Entries</div>
+                <div class="card-body">
+                    @if (Vault.Entries.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">No entries in vault.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Label</th>
+                                    <th>Identity</th>
+                                    <th style="width:150px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in Vault.Entries)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (_renamingIdentity == entry.Identity)
+                                            {
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           @bind="_renameLabel" />
+                                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ConfirmRename(entry.Identity)">
+                                                        <i class="bi bi-check"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" @onclick="CancelRename">
+                                                        <i class="bi bi-x"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                @entry.Label
+                                            }
+                                        </td>
+                                        <td><code class="small">@entry.Identity</code></td>
+                                        <td>
+                                            @if (_renamingIdentity != entry.Identity)
+                                            {
+                                                <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => StartRename(entry)"
+                                                        title="Rename">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveVaultEntry(entry)"
+                                                        title="Remove">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Add Seed to Vault</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Seed (55 characters)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="@(_vaultAddSeedRevealed ? "text" : "password")" class="form-control form-control-sm mono"
+                                   @bind="_vaultAddSeed" placeholder="Enter or generate a 55-char seed..." />
+                            <button class="btn btn-outline-secondary" type="button"
+                                    @onclick="() => _vaultAddSeedRevealed = !_vaultAddSeedRevealed"
+                                    title="@(_vaultAddSeedRevealed ? "Hide" : "Reveal")">
+                                <i class="bi @(_vaultAddSeedRevealed ? "bi-eye-slash" : "bi-eye")"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" type="button" @onclick="GenerateVaultAddSeed"
+                                    title="Generate random seed">
+                                <i class="bi bi-shuffle me-1"></i>Generate
+                            </button>
+                        </div>
+                    </div>
+                    @if (_vaultAddSeedGenerated)
+                    {
+                        <div class="alert alert-danger small py-2 mb-2">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            <strong>Write down this seed and store it safely!</strong> If you lose it, there is no recovery.
+                        </div>
+                    }
+                    <div class="mb-2">
+                        <label class="form-label small">Label</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_vaultAddLabel" placeholder="e.g. Trading" />
+                    </div>
+                    @if (_vaultAddError != null)
+                    {
+                        <div class="text-danger small mb-2">@_vaultAddError</div>
+                    }
+                    <button class="btn btn-primary btn-sm" @onclick="AddVaultEntry">
+                        <i class="bi bi-plus-circle me-1"></i>Add Entry
+                    </button>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Change Vault Password</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Current Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultOldPassword" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">New Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultNewPassword" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Confirm New Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="_vaultNewPasswordConfirm" />
+                    </div>
+                    @if (_vaultPasswordChangeError != null)
+                    {
+                        <div class="text-danger small mb-2">@_vaultPasswordChangeError</div>
+                    }
+                    @if (_vaultPasswordChanged)
+                    {
+                        <div class="text-success small mb-2"><i class="bi bi-check-circle me-1"></i>Password changed successfully.</div>
+                    }
+                    <button class="btn btn-outline-primary btn-sm" @onclick="ChangeVaultPassword">
+                        <i class="bi bi-key me-1"></i>Change Password
+                    </button>
+                </div>
+            </div>
+
+            <div class="card border-danger">
+                <div class="card-header text-danger">Danger Zone</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">
+                        Permanently delete the vault file and all stored entries. This cannot be undone.
+                    </p>
+                    @if (!_confirmDeleteVault)
+                    {
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => _confirmDeleteVault = true">
+                            <i class="bi bi-trash me-1"></i>Delete Vault
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="alert alert-danger py-2 mb-2">
+                            <strong>Are you sure?</strong> This will permanently delete your vault and all stored seeds.
+                        </div>
+                        <button class="btn btn-danger btn-sm me-2" @onclick="DeleteVault">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Yes, Delete Vault
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmDeleteVault = false">
+                            Cancel
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning py-2 mb-3">
+                <i class="bi bi-lock me-1"></i>
+                Vault is locked. Unlock it from the toolbar to manage entries.
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="DisconnectVault">
+                <i class="bi bi-box-arrow-right me-1"></i>Disconnect Vault
+            </button>
+        }
+    </div></div>
+}
 
 @code {
     private string _theme = "light";
@@ -409,5 +668,162 @@ else if (_activeTab == "data")
         if (bytes < 1024) return $"{bytes} B";
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    // ── Vault settings ──
+    private string _vaultCreatePath = "";
+    private string? _vaultCreateSeed;
+    private string? _vaultCreateLabel;
+    private string? _vaultCreatePassword;
+    private string? _vaultCreatePasswordConfirm;
+    private string? _vaultCreateError;
+
+    private string? _vaultOpenPath;
+    private string? _vaultOpenError;
+
+    private string? _vaultAddSeed;
+    private string? _vaultAddLabel;
+    private string? _vaultAddError;
+    private bool _vaultAddSeedRevealed;
+    private bool _vaultAddSeedGenerated;
+
+    private string? _renamingIdentity;
+    private string _renameLabel = "";
+
+    private string? _vaultOldPassword;
+    private string? _vaultNewPassword;
+    private string? _vaultNewPasswordConfirm;
+    private string? _vaultPasswordChangeError;
+    private bool _vaultPasswordChanged;
+
+    private bool _confirmDeleteVault;
+
+    protected override void OnInitialized()
+    {
+        _vaultCreatePath = Path.Combine(Cfg.StorageDirectory, "vault.dat");
+    }
+
+    private void CreateVaultFromSettings()
+    {
+        _vaultCreateError = null;
+        if (string.IsNullOrWhiteSpace(_vaultCreatePath)) { _vaultCreateError = "File path is required."; return; }
+        if (_vaultCreateSeed?.Length != 55) { _vaultCreateError = "Seed must be 55 characters."; return; }
+        if (string.IsNullOrWhiteSpace(_vaultCreateLabel)) { _vaultCreateError = "Label is required."; return; }
+        var pwError = VaultService.ValidatePassword(_vaultCreatePassword);
+        if (pwError != null) { _vaultCreateError = pwError; return; }
+        if (_vaultCreatePassword != _vaultCreatePasswordConfirm) { _vaultCreateError = "Passwords do not match."; return; }
+
+        try
+        {
+            var entries = new List<VaultEntry> { new() { Label = _vaultCreateLabel, Seed = _vaultCreateSeed } };
+            Vault.CreateVault(_vaultCreatePath, _vaultCreatePassword!, entries);
+            _vaultCreateSeed = null; _vaultCreateLabel = null;
+            _vaultCreatePassword = null; _vaultCreatePasswordConfirm = null;
+        }
+        catch (Exception ex) { _vaultCreateError = ex.Message; }
+    }
+
+    private void OpenExistingVault()
+    {
+        _vaultOpenError = null;
+        if (string.IsNullOrWhiteSpace(_vaultOpenPath)) { _vaultOpenError = "File path is required."; return; }
+        try
+        {
+            Vault.SetVaultPath(_vaultOpenPath);
+        }
+        catch (Exception ex) { _vaultOpenError = ex.Message; }
+    }
+
+    private void GenerateVaultAddSeed()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(55);
+        var chars = new char[55];
+        for (var i = 0; i < 55; i++)
+            chars[i] = (char)('a' + bytes[i] % 26);
+        _vaultAddSeed = new string(chars);
+        _vaultAddSeedGenerated = true;
+        _vaultAddError = null;
+    }
+
+    private void AddVaultEntry()
+    {
+        _vaultAddError = null;
+        if (string.IsNullOrWhiteSpace(_vaultAddSeed) || _vaultAddSeed.Length != 55)
+        {
+            _vaultAddError = "Seed must be exactly 55 characters.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_vaultAddLabel))
+        {
+            _vaultAddError = "Label is required.";
+            return;
+        }
+        try
+        {
+            Vault.AddEntry(_vaultAddLabel, _vaultAddSeed);
+            _vaultAddSeed = null; _vaultAddLabel = null;
+            _vaultAddSeedRevealed = false; _vaultAddSeedGenerated = false;
+        }
+        catch (Exception ex) { _vaultAddError = ex.Message; }
+    }
+
+    private void RemoveVaultEntry(VaultEntry entry)
+    {
+        if (Seed.HasSeed && Seed.Identity?.ToString() == entry.Identity)
+        {
+            Seed.ClearSeed();
+            WalletStorage.ClearSeed();
+            TxTracker.ClearEncryptionKey();
+        }
+        Vault.RemoveEntry(entry.Identity);
+    }
+
+    private void StartRename(VaultEntry entry)
+    {
+        _renamingIdentity = entry.Identity;
+        _renameLabel = entry.Label;
+    }
+
+    private void ConfirmRename(string identity)
+    {
+        if (!string.IsNullOrWhiteSpace(_renameLabel))
+            Vault.RenameEntry(identity, _renameLabel);
+        _renamingIdentity = null;
+    }
+
+    private void CancelRename() => _renamingIdentity = null;
+
+    private void ChangeVaultPassword()
+    {
+        _vaultPasswordChangeError = null;
+        _vaultPasswordChanged = false;
+        var pwError = VaultService.ValidatePassword(_vaultNewPassword);
+        if (pwError != null) { _vaultPasswordChangeError = pwError; return; }
+        if (_vaultNewPassword != _vaultNewPasswordConfirm) { _vaultPasswordChangeError = "Passwords do not match."; return; }
+        try
+        {
+            Vault.ChangePassword(_vaultOldPassword!, _vaultNewPassword!);
+            _vaultOldPassword = null; _vaultNewPassword = null; _vaultNewPasswordConfirm = null;
+            _vaultPasswordChanged = true;
+        }
+        catch (Exception ex) { _vaultPasswordChangeError = ex.Message; }
+    }
+
+    private void DeleteVault()
+    {
+        Seed.ClearSeed();
+        WalletStorage.ClearSeed();
+        TxTracker.ClearEncryptionKey();
+        Vault.DeleteVault();
+        _confirmDeleteVault = false;
+    }
+
+    private void DisconnectVault()
+    {
+        Seed.ClearSeed();
+        WalletStorage.ClearSeed();
+        TxTracker.ClearEncryptionKey();
+        Vault.LockVault();
+        Cfg.RemoveCustom("vault_path");
     }
 }
