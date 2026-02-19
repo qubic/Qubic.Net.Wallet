@@ -8,15 +8,19 @@ Cross-platform desktop wallet for the [Qubic](https://qubic.org) network. Runs a
 ## Features
 
 - **Dashboard** — identity, QU balance, network status, owned assets, and open orders at a glance
-- **Send / Receive** — single transfers and batch "Send to Many"
+- **Send / Receive** — single transfers with QR code support, batch "Send to Many" with reusable templates
+- **Encrypted Vault** — password-protected vault stores multiple seeds and an address book, encrypted with AES-256-GCM
+- **Address Book** — save contacts and quickly select them from any address input with autocomplete
 - **Assets** — view and transfer QX-listed tokens
 - **QX Trading** — place and cancel asset orders on the Qubic DEX
 - **Qearn Staking** — lock/unlock QU for staking rewards
 - **Qswap DEX** — decentralized token swap interface
 - **MSVault** — multi-signature vault management (create, deposit, release, approve/deny)
+- **Community Voting** — view active proposals and cast votes
+- **SC Auction** — bid on smart contract slots
 - **Transaction History** — full history with local encrypted storage and sync
 - **Sign / Verify** — sign messages with your seed and verify signatures
-- **Settings** — backend selection (RPC / Bob / Direct TCP), peer management, label sources, database import/export
+- **Settings** — backend selection (RPC / Bob / Direct TCP), peer management, label sources, theme toggle, database import/export
 
 <img width="1800" height="1400" alt="wallet-architecture" src="https://github.com/user-attachments/assets/ae1e3f7a-28df-44cc-8f79-4e7cc560b389" />
 
@@ -133,10 +137,11 @@ Produces zip archives with SHA-256 hashes for:
 
 ## Security
 
-- Your 55-character seed is held **in memory only** for the current session — it is never written to disk
+- Your 55-character seed is held **in memory only** for the current session — it is never written to disk unencrypted
+- **Vault encryption**: Seeds and contacts are stored in an AES-256-GCM encrypted vault file, protected by a user-chosen password with Argon2id key derivation
 - The local database is encrypted with [SQLCipher](https://www.zetetic.net/sqlcipher/) using a key derived from your seed
 - In server mode, access is protected by a one-time session token (HttpOnly cookie, localhost only)
-- The database file is useless without the seed
+- The database and vault files are useless without the respective passwords/seeds
 
 > [!WARNING]
 > **Server mode** uses unencrypted HTTP on localhost. A local proxy or other software on the same machine could intercept the communication between your browser and the app, including your seed. Prefer **desktop mode** when possible. Only use `--server` on machines you fully trust.

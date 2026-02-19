@@ -11,6 +11,59 @@ using Qubic.Net.Wallet.Components;
 
 namespace Qubic.Net.Wallet;
 
+public class FileDialogService
+{
+    private Photino.NET.PhotinoWindow? _window;
+
+    public void SetWindow(Photino.NET.PhotinoWindow window) => _window = window;
+
+    public bool IsAvailable => _window != null;
+
+    public Task<string?> ShowSaveFileAsync(string title, string defaultPath,
+        string defaultExtension = ".dat",
+        params (string Name, string[] Extensions)[] filters)
+    {
+        if (_window == null) return Task.FromResult<string?>(null);
+        var safePath = NormalizePath(defaultPath);
+        return Task.Run(() =>
+        {
+            var path = _window.ShowSaveFile(title, safePath, filters);
+            if (path != null && !string.IsNullOrEmpty(defaultExtension)
+                && !Path.HasExtension(path))
+                path += defaultExtension;
+            return path;
+        });
+    }
+
+    public Task<string?> ShowOpenFileAsync(string title, string defaultPath,
+        params (string Name, string[] Extensions)[] filters)
+    {
+        if (_window == null) return Task.FromResult<string?>(null);
+        var safePath = NormalizePath(defaultPath);
+        return Task.Run(() =>
+        {
+            var result = _window.ShowOpenFile(title, safePath, false, filters);
+            return result?.FirstOrDefault();
+        });
+    }
+
+    /// <summary>
+    /// Photino's native dialog expects defaultPath to be an existing directory.
+    /// If a full file path is given, extract the directory portion.
+    /// </summary>
+    private static string NormalizePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        // If it looks like a file path (has extension), use the directory
+        if (Path.HasExtension(path))
+        {
+            var dir = Path.GetDirectoryName(path);
+            return dir ?? "";
+        }
+        return path;
+    }
+}
+
 class Program
 {
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -60,6 +113,7 @@ class Program
         services.AddSingleton<PeerAutoDiscoverService>();
         services.AddSingleton<QubicStaticService>();
         services.AddSingleton<LabelService>();
+        services.AddSingleton(new FileDialogService());
         services.AddLocalization();
     }
 
@@ -73,6 +127,7 @@ class Program
         appBuilder.RootComponents.Add<Routes>("app");
 
         var app = appBuilder.Build();
+        app.Services.GetRequiredService<FileDialogService>().SetWindow(app.MainWindow);
         var iconPath = GetIconPath();
         app.MainWindow
             .SetTitle("Qubic.Net Wallet")

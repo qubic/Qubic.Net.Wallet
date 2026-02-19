@@ -8,6 +8,7 @@
 @inject IJSRuntime JS
 @inject VaultService Vault
 @inject TransactionTrackerService TxTracker
+@inject FileDialogService DialogService
 
 <h4>Settings</h4>
 <p class="text-muted">Configure Qubic.Net Wallet behavior.</p>
@@ -293,8 +294,16 @@ else if (_activeTab == "vault")
                 <div class="card-body">
                     <div class="mb-2">
                         <label class="form-label small">Vault File Location</label>
-                        <input type="text" class="form-control form-control-sm"
-                               @bind="_vaultCreatePath" placeholder="Path to save vault file..." />
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control"
+                                   @bind="_vaultCreatePath" placeholder="Path to save vault file..." />
+                            @if (DialogService.IsAvailable)
+                            {
+                                <button class="btn btn-outline-secondary" type="button" @onclick="BrowseCreateVaultPath">
+                                    <i class="bi bi-folder2-open"></i>
+                                </button>
+                            }
+                        </div>
                         <div class="form-text">Choose where to save your encrypted vault file.</div>
                     </div>
                     <div class="mb-2">
@@ -337,8 +346,16 @@ else if (_activeTab == "vault")
                 <div class="card-body">
                     <div class="mb-2">
                         <label class="form-label small">Vault File Path</label>
-                        <input type="text" class="form-control form-control-sm"
-                               @bind="_vaultOpenPath" placeholder="Path to existing vault file..." />
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control"
+                                   @bind="_vaultOpenPath" placeholder="Path to existing vault file..." />
+                            @if (DialogService.IsAvailable)
+                            {
+                                <button class="btn btn-outline-secondary" type="button" @onclick="BrowseOpenVaultPath">
+                                    <i class="bi bi-folder2-open"></i>
+                                </button>
+                            }
+                        </div>
                     </div>
                     @if (_vaultOpenError != null)
                     {
@@ -355,6 +372,13 @@ else if (_activeTab == "vault")
             <div class="alert alert-success py-2 mb-3">
                 <i class="bi bi-unlock me-1"></i>
                 Vault is unlocked. File: <code>@Vault.VaultPath</code>
+                <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="BrowseMoveVault">
+                    <i class="bi bi-folder2-open me-1"></i>Change Location
+                </button>
+                @if (_moveVaultError != null)
+                {
+                    <div class="text-danger small mt-1">@_moveVaultError</div>
+                }
             </div>
 
             <div class="card mb-3">
@@ -765,6 +789,7 @@ else if (_activeTab == "vault")
 
     private string? _vaultOpenPath;
     private string? _vaultOpenError;
+    private string? _moveVaultError;
 
     private string? _vaultAddSeed;
     private string? _vaultAddLabel;
@@ -793,6 +818,34 @@ else if (_activeTab == "vault")
     protected override void OnInitialized()
     {
         _vaultCreatePath = Path.Combine(Cfg.StorageDirectory, "vault.dat");
+    }
+
+    private async Task BrowseCreateVaultPath()
+    {
+        var path = await DialogService.ShowSaveFileAsync("Create Vault File", _vaultCreatePath, ".dat",
+            ("Vault files", new[] { "*.dat" }), ("All files", new[] { "*.*" }));
+        if (path != null) _vaultCreatePath = path;
+    }
+
+    private async Task BrowseMoveVault()
+    {
+        _moveVaultError = null;
+        if (!DialogService.IsAvailable) return;
+        var path = await DialogService.ShowSaveFileAsync("Move Vault File", Vault.VaultPath ?? "", ".dat",
+            ("Vault files", new[] { "*.dat" }), ("All files", new[] { "*.*" }));
+        if (path == null) return;
+        try
+        {
+            Vault.MoveVault(path);
+        }
+        catch (Exception ex) { _moveVaultError = ex.Message; }
+    }
+
+    private async Task BrowseOpenVaultPath()
+    {
+        var path = await DialogService.ShowOpenFileAsync("Open Vault File", _vaultOpenPath ?? "",
+            ("Vault files", new[] { "*.dat" }), ("All files", new[] { "*.*" }));
+        if (path != null) _vaultOpenPath = path;
     }
 
     private void CreateVaultFromSettings()

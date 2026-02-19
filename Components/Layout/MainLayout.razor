@@ -11,6 +11,7 @@
 @inject VaultService Vault
 @inject NavigationManager Nav
 @inject LabelService Labels
+@inject FileDialogService DialogService
 @inject IJSRuntime JS
 
 <div class="d-flex flex-column vh-100">
@@ -183,9 +184,17 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label small">Vault File Location</label>
-                        <input type="text" class="form-control form-control-sm"
-                               placeholder="Path to save vault file..."
-                               @bind="_saveVaultPath" />
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control"
+                                   placeholder="Path to save vault file..."
+                                   @bind="_saveVaultPath" />
+                            @if (DialogService.IsAvailable)
+                            {
+                                <button class="btn btn-outline-secondary" type="button" @onclick="BrowseSaveVaultPath">
+                                    <i class="bi bi-folder2-open"></i>
+                                </button>
+                            }
+                        </div>
                         <div class="form-text">Choose where to save your encrypted vault file.</div>
                     </div>
                     <div class="mb-3">
@@ -472,6 +481,13 @@
         {
             _saveVaultError = ex.Message;
         }
+    }
+
+    private async Task BrowseSaveVaultPath()
+    {
+        var path = await DialogService.ShowSaveFileAsync("Save Vault File", _saveVaultPath, ".dat",
+            ("Vault files", new[] { "*.dat" }), ("All files", new[] { "*.*" }));
+        if (path != null) _saveVaultPath = path;
     }
 
     private void CloseSaveToVault()
