@@ -5,6 +5,7 @@
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
 @inject IJSRuntime JS
+@inject VaultService Vault
 
 <h4>QEarn Staking</h4>
 <p class="text-muted">Lock QU to earn rewards, unlock, and query staking information.</p>
@@ -155,8 +156,7 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                 {
                     <div class="mb-2">
                         <label class="form-label-sm">User Identity</label>
-                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_qIdentity)"
-                               @bind="_qIdentity" @bind:event="oninput" placeholder="IDENTITY..." />
+                        <AddressInput @bind-Value="_qIdentity" />
                     </div>
                 }
                 @if (_queryFunc == 2)

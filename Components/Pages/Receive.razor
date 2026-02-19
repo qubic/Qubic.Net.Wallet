@@ -19,7 +19,7 @@ else
                     @if (_qrSvg != null)
                     {
                         <div class="mb-3 d-flex justify-content-center">
-                            <div style="width:250px; height:250px; background:white; padding:12px; border-radius:8px">
+                            <div id="qr-container" style="width:250px; height:250px; background:white; padding:12px; border-radius:8px">
                                 @((MarkupString)_qrSvg)
                             </div>
                         </div>
@@ -31,6 +31,13 @@ else
                         <i class="bi @(_copied ? "bi-check-lg" : "bi-clipboard") me-1"></i>
                         @(_copied ? "Copied!" : "Copy Address")
                     </button>
+                    @if (_qrSvg != null)
+                    {
+                        <button class="btn btn-outline-primary ms-2" @onclick="CopyQr">
+                            <i class="bi @(_qrCopied ? "bi-check-lg" : "bi-image") me-1"></i>
+                            @(_qrCopied ? "Copied!" : "Copy QR")
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -39,6 +46,7 @@ else
 
 @code {
     private bool _copied;
+    private bool _qrCopied;
     private string? _qrSvg;
 
     protected override void OnParametersSet()
@@ -60,5 +68,19 @@ else
         StateHasChanged();
         await Task.Delay(2000);
         _copied = false;
+    }
+
+    private async Task CopyQr()
+    {
+        if (_qrSvg == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("copyQrAsImage", "qr-container");
+            _qrCopied = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            _qrCopied = false;
+        }
+        catch { }
     }
 }

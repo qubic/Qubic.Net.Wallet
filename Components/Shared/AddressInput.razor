@@ -1,0 +1,176 @@
+@inject VaultService Vault
+@implements IDisposable
+
+<div style="position:relative" @onfocusout="OnFocusOut">
+    <input class="form-control form-control-sm mono @ValidationCss @CssClass"
+           value="@Value" @oninput="OnInput" @onfocus="OnFocus"
+           placeholder="@Placeholder" autocomplete="off" />
+    @if (MatchedSuggestion is { } match)
+    {
+        <span class="small text-muted">
+            @if (match.IsOwn) { <i class="bi bi-wallet2 text-primary me-1"></i> }
+            else { <i class="bi bi-person me-1"></i> }
+            @match.Label
+        </span>
+    }
+    @if (_showDropdown && (_filtered.Count > 0 || _canSave))
+    {
+        <div class="dropdown-menu show py-1"
+             style="position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;z-index:1055">
+            @foreach (var s in _filtered)
+            {
+                <button class="dropdown-item small py-1" @onmousedown="() => Select(s)" @onmousedown:preventDefault>
+                    @if (s.IsOwn)
+                    {
+                        <i class="bi bi-wallet2 text-primary me-1" title="Your identity"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-person text-muted me-1" title="Contact"></i>
+                    }
+                    <strong>@s.Label</strong>
+                    <span class="mono text-muted ms-1 small">@s.Address[..8]...@s.Address[^8..]</span>
+                </button>
+            }
+            @if (_canSave)
+            {
+                @if (_filtered.Count > 0) { <hr class="dropdown-divider my-1" /> }
+                @if (!_savingMode)
+                {
+                    <button class="dropdown-item small py-1 text-primary" @onmousedown="() => _savingMode = true" @onmousedown:preventDefault>
+                        <i class="bi bi-person-plus me-1"></i>Save to address book
+                    </button>
+                }
+                else
+                {
+                    <div class="px-2 py-1 d-flex gap-1">
+                        <input type="text" class="form-control form-control-sm" style="width:120px"
+                               @bind="_saveLabel" @onkeydown="OnSaveLabelKey" placeholder="Label" />
+                        <button class="btn btn-sm btn-primary" @onclick="DoSave">Save</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => { _savingMode = false; _saveLabel = null; _showDropdown = false; }">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "IDENTITY...";
+    [Parameter] public string? CssClass { get; set; }
+    [Parameter] public bool AllowContractIndex { get; set; }
+
+    private record Suggestion(string Label, string Address, bool IsOwn);
+
+    private List<Suggestion> _allSuggestions = [];
+    private List<Suggestion> _filtered = [];
+    private bool _showDropdown;
+    private bool _canSave;
+    private bool _savingMode;
+    private string? _saveLabel;
+
+    private Suggestion? MatchedSuggestion => string.IsNullOrWhiteSpace(Value) ? null
+        : _allSuggestions.FirstOrDefault(s => s.Address.Equals(Value, StringComparison.OrdinalIgnoreCase));
+
+    private string ValidationCss => AllowContractIndex
+        ? IdentityValidation.DestCssClass(Value)
+        : IdentityValidation.CssClass(Value);
+
+    protected override void OnInitialized()
+    {
+        Vault.OnVaultChanged += OnVaultChanged;
+        BuildSuggestions();
+    }
+
+    private void OnVaultChanged()
+    {
+        BuildSuggestions();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void BuildSuggestions()
+    {
+        _allSuggestions = [];
+        if (!Vault.IsUnlocked) return;
+
+        foreach (var entry in Vault.Entries)
+            _allSuggestions.Add(new Suggestion(entry.Label, entry.Identity, IsOwn: true));
+
+        foreach (var contact in Vault.Contacts)
+            _allSuggestions.Add(new Suggestion(contact.Label, contact.Address, IsOwn: false));
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        await ValueChanged.InvokeAsync(val);
+        Filter(val);
+    }
+
+    private void OnFocus()
+    {
+        if (_allSuggestions.Count == 0) return;
+        Filter(Value ?? "");
+    }
+
+    private void Filter(string text)
+    {
+        _savingMode = false;
+        _saveLabel = null;
+        _canSave = Vault.IsUnlocked
+                   && !string.IsNullOrWhiteSpace(text)
+                   && IdentityValidation.Validate(text) == null
+                   && !Vault.IsKnownAddress(text);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _filtered = _allSuggestions;
+        }
+        else
+        {
+            _filtered = _allSuggestions
+                .Where(s => s.Label.Contains(text, StringComparison.OrdinalIgnoreCase)
+                         || s.Address.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        _showDropdown = _filtered.Count > 0 || _canSave;
+    }
+
+    private async Task Select(Suggestion suggestion)
+    {
+        await ValueChanged.InvokeAsync(suggestion.Address);
+        _showDropdown = false;
+    }
+
+    private void OnSaveLabelKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") DoSave();
+        else if (e.Key == "Escape") { _savingMode = false; _saveLabel = null; _showDropdown = false; }
+    }
+
+    private void DoSave()
+    {
+        if (string.IsNullOrWhiteSpace(_saveLabel) || string.IsNullOrWhiteSpace(Value)) return;
+        try { Vault.AddContact(_saveLabel, Value.Trim()); } catch { }
+        _savingMode = false;
+        _saveLabel = null;
+        _canSave = false;
+        _showDropdown = false;
+        BuildSuggestions();
+    }
+
+    private void OnFocusOut()
+    {
+        if (_savingMode) return; // keep dropdown open while entering label
+        _showDropdown = false;
+    }
+
+    public void Dispose()
+    {
+        Vault.OnVaultChanged -= OnVaultChanged;
+    }
+}

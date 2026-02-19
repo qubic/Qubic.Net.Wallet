@@ -9,6 +9,7 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
+@inject VaultService Vault
 
 <h4>Community Voting</h4>
 <p class="text-muted">Browse, vote on, and create community polls via the QUtil contract.</p>
@@ -309,10 +310,9 @@
                                 var i = idx;
                                 <div class="row g-1 mb-1">
                                     <div class="col-7">
-                                        <input class="form-control form-control-sm mono"
-                                               value="@_assetIssuers[i]"
-                                               @onchange="(e) => _assetIssuers[i] = e.Value?.ToString() ?? string.Empty"
-                                               placeholder="Issuer identity (60 chars)" />
+                                        <AddressInput Value="@_assetIssuers[i]"
+                                                     ValueChanged="(v) => _assetIssuers[i] = v"
+                                                     Placeholder="Issuer identity (60 chars)" />
                                     </div>
                                     <div class="col-4">
                                         <input class="form-control form-control-sm"

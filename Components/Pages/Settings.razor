@@ -461,6 +461,91 @@ else if (_activeTab == "vault")
             </div>
 
             <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-person-lines-fill me-1"></i>Address Book</div>
+                <div class="card-body">
+                    @if (Vault.Contacts.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">No contacts in address book.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Label</th>
+                                    <th>Address</th>
+                                    <th style="width:150px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var contact in Vault.Contacts)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (_renamingContactAddr == contact.Address)
+                                            {
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           @bind="_contactRenameLabel" />
+                                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ConfirmContactRename(contact.Address)">
+                                                        <i class="bi bi-check"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" @onclick="CancelContactRename">
+                                                        <i class="bi bi-x"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                @contact.Label
+                                            }
+                                        </td>
+                                        <td><code class="small">@contact.Address[..12]...@contact.Address[^8..]</code></td>
+                                        <td>
+                                            @if (_renamingContactAddr != contact.Address)
+                                            {
+                                                <button class="btn btn-outline-secondary btn-sm me-1"
+                                                        @onclick="() => StartContactRename(contact)" title="Rename">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-sm"
+                                                        @onclick="() => RemoveContact(contact)" title="Remove">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Add Contact</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Label</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_contactAddLabel" placeholder="e.g. Exchange Hot Wallet" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Address (60-character identity)</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_contactAddAddress)"
+                               @bind="_contactAddAddress" @bind:event="oninput" placeholder="IDENTITY..." />
+                    </div>
+                    @if (_contactAddError != null)
+                    {
+                        <div class="text-danger small mb-2">@_contactAddError</div>
+                    }
+                    <button class="btn btn-primary btn-sm" @onclick="AddContact">
+                        <i class="bi bi-plus-circle me-1"></i>Add Contact
+                    </button>
+                </div>
+            </div>
+
+            <div class="card mb-3">
                 <div class="card-header">Change Vault Password</div>
                 <div class="card-body">
                     <div class="mb-2">
@@ -698,6 +783,13 @@ else if (_activeTab == "vault")
 
     private bool _confirmDeleteVault;
 
+    // Address book
+    private string? _contactAddLabel;
+    private string? _contactAddAddress;
+    private string? _contactAddError;
+    private string? _renamingContactAddr;
+    private string _contactRenameLabel = "";
+
     protected override void OnInitialized()
     {
         _vaultCreatePath = Path.Combine(Cfg.StorageDirectory, "vault.dat");
@@ -826,4 +918,41 @@ else if (_activeTab == "vault")
         Vault.LockVault();
         Cfg.RemoveCustom("vault_path");
     }
+
+    // ── Address book ──
+
+    private void AddContact()
+    {
+        _contactAddError = null;
+        if (string.IsNullOrWhiteSpace(_contactAddLabel))
+        { _contactAddError = "Label is required."; return; }
+        var err = IdentityValidation.Validate(_contactAddAddress);
+        if (err != null) { _contactAddError = err; return; }
+        try
+        {
+            Vault.AddContact(_contactAddLabel, _contactAddAddress!.Trim());
+            _contactAddLabel = null; _contactAddAddress = null;
+        }
+        catch (Exception ex) { _contactAddError = ex.Message; }
+    }
+
+    private void RemoveContact(ContactEntry contact)
+    {
+        Vault.RemoveContact(contact.Address);
+    }
+
+    private void StartContactRename(ContactEntry contact)
+    {
+        _renamingContactAddr = contact.Address;
+        _contactRenameLabel = contact.Label;
+    }
+
+    private void ConfirmContactRename(string address)
+    {
+        if (!string.IsNullOrWhiteSpace(_contactRenameLabel))
+            Vault.RenameContact(address, _contactRenameLabel);
+        _renamingContactAddr = null;
+    }
+
+    private void CancelContactRename() => _renamingContactAddr = null;
 }

@@ -7,16 +7,18 @@
 @inject QubicSettingsService Settings
 @inject QubicStaticService StaticData
 @inject NavigationManager Nav
+@inject VaultService Vault
 
 <h4>Asset Portfolio</h4>
 <p class="text-muted">View owned, issued, and possessed assets for any identity. Transfer assets and change management rights.</p>
 
 <div class="row mb-3">
     <div class="col-md-10">
-        <div class="input-group mb-1">
-            <input class="form-control @IdentityValidation.CssClass(_identity)"
-                   placeholder="Enter 60-character identity" @bind="_identity" @bind:event="oninput" />
-            <button class="btn btn-primary" @onclick="Lookup" disabled="@(_loading || IdentityValidation.Validate(_identity) != null)">
+        <div class="d-flex gap-2 mb-1">
+            <div class="flex-grow-1">
+                <AddressInput @bind-Value="_identity" Placeholder="Enter 60-character identity" />
+            </div>
+            <button class="btn btn-sm btn-primary" @onclick="Lookup" disabled="@(_loading || IdentityValidation.Validate(_identity) != null)">
                 @(_loading ? "Loading..." : "Lookup Assets")
             </button>
         </div>
@@ -319,8 +321,7 @@ else if ((_myAskOrders != null && _myAskOrders.Count > 0) || (_myBidOrders != nu
                         @if (_actionMode == ActionMode.Transfer)
                         {
                             <div class="mb-2"><label class="form-label-sm">Destination Identity</label>
-                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_actionDest)"
-                                       @bind="_actionDest" @bind:event="oninput" placeholder="IDENTITY..." /></div>
+                                <AddressInput @bind-Value="_actionDest" /></div>
                             <div class="mb-2"><label class="form-label-sm">Number of Shares (max: @_actionMaxShares.ToString("N0"))</label>
                                 <input type="number" class="form-control form-control-sm" min="1" max="@_actionMaxShares" @bind="_actionShares" /></div>
                         }
@@ -361,6 +362,19 @@ else if ((_myAskOrders != null && _myAskOrders.Count > 0) || (_myBidOrders != nu
                                     <a href="/history">Transaction History</a>
                                 </div>
                             </div>
+                            @if (_actionMode == ActionMode.Transfer && Vault.IsUnlocked && !_dismissSaveContact && !string.IsNullOrEmpty(_actionDest) && !Vault.IsKnownAddress(_actionDest))
+                            {
+                                <div class="alert alert-info mt-2 py-2 mb-0 d-flex align-items-center gap-2 flex-wrap">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span class="small">Save <span class="mono">@_actionDest[..12]...</span> to address book?</span>
+                                    <input type="text" class="form-control form-control-sm" style="width:150px"
+                                           @bind="_saveContactLabel" placeholder="Label" />
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="SaveNewContact">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _dismissSaveContact = true">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            }
                         }
                         @if (_actionError != null) { <div class="alert alert-danger mt-2 mb-0">@_actionError</div> }
                     }
@@ -440,6 +454,17 @@ else if ((_myAskOrders != null && _myAskOrders.Count > 0) || (_myBidOrders != nu
     private long _actionPrice;
     private bool _actionSending;
     private string? _actionResult;
+
+    // Save to address book
+    private string? _saveContactLabel;
+    private bool _dismissSaveContact;
+    private void SaveNewContact()
+    {
+        if (string.IsNullOrWhiteSpace(_saveContactLabel) || string.IsNullOrEmpty(_actionDest)) return;
+        try { Vault.AddContact(_saveContactLabel, _actionDest.Trim()); } catch { }
+        _saveContactLabel = null;
+        _dismissSaveContact = true;
+    }
     private string? _actionError;
 
     protected override async Task OnInitializedAsync()

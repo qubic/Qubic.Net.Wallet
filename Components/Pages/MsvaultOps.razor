@@ -7,6 +7,7 @@
 @inject QubicSettingsService Settings
 @inject Qubic.Services.Storage.WalletStorageService WalletStorage
 @inject QubicStaticService StaticData
+@inject VaultService VaultSvc
 
 <h4>MSVault (Multisig)</h4>
 <p class="text-muted">Manage multisig vaults: register, deposit, release, and vote on fee changes.</p>
@@ -240,12 +241,13 @@ else
                         @for (int idx = 0; idx < _regOwners.Count; idx++)
                         {
                             var i = idx;
-                            <div class="input-group input-group-sm mb-1">
-                                <span class="input-group-text">@(i + 1)</span>
-                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_regOwners[i])"
-                                       value="@_regOwners[i]"
-                                       @onchange="(e) => _regOwners[i] = e.Value?.ToString() ?? string.Empty"
-                                       placeholder="IDENTITY..." />
+                            <div class="d-flex gap-1 mb-1 align-items-start">
+                                <span class="input-group-text input-group-sm">@(i + 1)</span>
+                                <div class="flex-grow-1">
+                                    <AddressInput Value="@_regOwners[i]"
+                                                  ValueChanged="(v) => _regOwners[i] = v"
+                                                  Placeholder="IDENTITY..." />
+                                </div>
                                 @if (_regOwners.Count > 2)
                                 {
                                     <button class="btn btn-outline-danger btn-sm" @onclick="() => _regOwners.RemoveAt(i)">&times;</button>
@@ -313,8 +315,7 @@ else
                     @if (!_resetMode)
                     {
                         <div class="mb-2"><label class="form-label-sm">Destination Identity</label>
-                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_relDest)"
-                                   @bind="_relDest" placeholder="IDENTITY..." /></div>
+                            <AddressInput @bind-Value="_relDest" /></div>
                         <div class="mb-2"><label class="form-label-sm">Amount (QU)</label>
                             <input type="number" class="form-control form-control-sm" min="0" @bind="_relAmount" /></div>
                     }
@@ -383,8 +384,7 @@ else
                     @if (_assetOp == "release")
                     {
                         <div class="mb-2"><label class="form-label-sm">Destination Identity</label>
-                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_aDest)"
-                                   @bind="_aDest" placeholder="IDENTITY..." /></div>
+                            <AddressInput @bind-Value="_aDest" /></div>
                     }
                     <button class="btn btn-primary" @onclick="AssetOp" disabled="@_sending">@(_sending ? "Sending..." : "Submit")</button>
                 </div></div>
@@ -408,8 +408,7 @@ else
                     @if (_queryFunc is 5 or 12)
                     {
                         <div class="mb-2"><label class="form-label-sm">Identity</label>
-                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_qIdentity)"
-                                   @bind="_qIdentity" @bind:event="oninput" placeholder="IDENTITY..." /></div>
+                            <AddressInput @bind-Value="_qIdentity" /></div>
                     }
                     @if (_queryFunc is 6 or 7 or 8 or 11)
                     {
@@ -517,6 +516,19 @@ else
                     <a href="/history">Transaction History</a>
                 </div>
             </div>
+            @foreach (var addr in _saveableAddresses)
+            {
+                <div class="alert alert-info mt-2 py-2 d-flex align-items-center gap-2 flex-wrap">
+                    <i class="bi bi-person-plus"></i>
+                    <span class="small">Save <span class="mono">@addr.Address[..12]...</span> to address book?</span>
+                    <input type="text" class="form-control form-control-sm" style="width:150px"
+                           @bind="addr.Label" placeholder="Label" />
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => SaveMsvaultContact(addr)">Save</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _saveableAddresses.Remove(addr)">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            }
         }
         @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
     </div></div>
@@ -570,6 +582,28 @@ else
         _sending = false;
         _pendingApproval = null;
         _pendingAssetApproval = null;
+    }
+
+    // Save to address book
+    private class SaveableAddress { public string Address { get; set; } = ""; public string? Label { get; set; } }
+    private readonly List<SaveableAddress> _saveableAddresses = [];
+
+    private void SaveMsvaultContact(SaveableAddress addr)
+    {
+        if (string.IsNullOrWhiteSpace(addr.Label)) return;
+        try { VaultSvc.AddContact(addr.Label, addr.Address.Trim()); } catch { }
+        _saveableAddresses.Remove(addr);
+    }
+
+    private void CollectSaveableAddresses(params string[] addresses)
+    {
+        _saveableAddresses.Clear();
+        if (!VaultSvc.IsUnlocked) return;
+        foreach (var a in addresses)
+        {
+            if (!string.IsNullOrEmpty(a) && !VaultSvc.IsKnownAddress(a))
+                _saveableAddresses.Add(new SaveableAddress { Address = a.Trim() });
+        }
     }
 
     // Auto-load vaults
@@ -970,6 +1004,7 @@ else
                         Destination = Qubic.Core.Entities.QubicIdentity.FromIdentity(dest).PublicKey
                     };
                     await Broadcast(fee, tick, payload, $"MSVault Release: vault {vaultId}, {amount:N0} QU");
+                    CollectSaveableAddresses(dest);
                 }
                 catch (Exception ex) { _error = ex.Message; }
                 finally { _sending = false; }
@@ -1138,6 +1173,7 @@ else
                             Destination = Qubic.Core.Entities.QubicIdentity.FromIdentity(dest).PublicKey
                         };
                         await Broadcast(releaseFee, tick, rp, $"MSVault Release Asset: vault {vaultId}, {name} x{amount}");
+                        CollectSaveableAddresses(dest);
                         break;
                     case "reset":
                         var rap = new Qubic.Core.Contracts.Msvault.ResetAssetReleasePayload { VaultId = vaultId };

@@ -6,6 +6,7 @@
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
 @inject AssetRegistryService AssetRegistry
+@inject VaultService Vault
 
 <h4>QX Asset Operations</h4>
 <p class="text-muted">Issue assets, transfer shares, and manage orders on the QX decentralized exchange.</p>
@@ -129,7 +130,7 @@ else
                             <AssetSelector @bind-IssuerValue="_xferIssuer" @bind-NameValue="_xferName" />
                             <div class="mb-2">
                                 <label class="form-label-sm">New Owner Identity</label>
-                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_xferNewOwner)" @bind="_xferNewOwner" @bind:event="oninput" placeholder="60 chars" />
+                                <AddressInput @bind-Value="_xferNewOwner" Placeholder="60 chars" />
                             </div>
                             <div class="mb-2">
                                 <label class="form-label-sm">Number of Shares</label>
@@ -218,6 +219,19 @@ else
                         <a href="/history">Transaction History</a>
                     </div>
                 </div>
+                @if (_activeTab == "Transfer" && Vault.IsUnlocked && !_dismissSaveContact && !string.IsNullOrEmpty(_xferNewOwner) && !Vault.IsKnownAddress(_xferNewOwner))
+                {
+                    <div class="alert alert-info mt-2 py-2 d-flex align-items-center gap-2 flex-wrap">
+                        <i class="bi bi-person-plus"></i>
+                        <span class="small">Save <span class="mono">@_xferNewOwner[..12]...</span> to address book?</span>
+                        <input type="text" class="form-control form-control-sm" style="width:150px"
+                               @bind="_saveContactLabel" placeholder="Label" />
+                        <button class="btn btn-sm btn-outline-primary" @onclick="SaveNewContact">Save</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => _dismissSaveContact = true">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                }
             }
             @if (_error != null)
             {
@@ -325,6 +339,17 @@ else
     private string _xferIssuer = "";
     private string? _xferNewOwner;
     private long _xferShares;
+
+    // Save to address book
+    private string? _saveContactLabel;
+    private bool _dismissSaveContact;
+    private void SaveNewContact()
+    {
+        if (string.IsNullOrWhiteSpace(_saveContactLabel) || string.IsNullOrEmpty(_xferNewOwner)) return;
+        try { Vault.AddContact(_saveContactLabel, _xferNewOwner.Trim()); } catch { }
+        _saveContactLabel = null;
+        _dismissSaveContact = true;
+    }
 
     // Orders
     private void SetOrderAdd() => _orderAction = "add";

@@ -4,6 +4,7 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
+@inject VaultService Vault
 
 <h4>QSwap AMM</h4>
 <p class="text-muted">Issue/transfer assets, create pools, add/remove liquidity, and swap on the QSwap AMM.</p>
@@ -46,7 +47,7 @@ else
                 <div class="card"><div class="card-header">Transfer Asset (QSwap)</div><div class="card-body">
                     <AssetSelector @bind-IssuerValue="_xferIssuer" @bind-NameValue="_xferName" />
                     <div class="mb-2"><label class="form-label-sm">New Owner Identity</label>
-                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_xferNewOwner)" @bind="_xferNewOwner" @bind:event="oninput" /></div>
+                        <AddressInput @bind-Value="_xferNewOwner" /></div>
                     <div class="mb-2"><label class="form-label-sm">Amount of Shares</label>
                         <input type="number" class="form-control form-control-sm" @bind="_xferAmount" /></div>
                     <button class="btn btn-primary" @onclick="TransferAsset" disabled="@_sending">@(_sending ? "Transferring..." : "Transfer")</button>
@@ -148,6 +149,20 @@ else
                     <a href="/history">Transaction History</a>
                 </div>
             </div>
+            @if (_activeTab == "Transfer" && Vault.IsUnlocked && !_dismissSaveContact
+                 && !string.IsNullOrEmpty(_xferNewOwner) && !Vault.IsKnownAddress(_xferNewOwner))
+            {
+                <div class="alert alert-info mt-2 py-2 d-flex align-items-center gap-2 flex-wrap">
+                    <i class="bi bi-person-plus"></i>
+                    <span class="small">Save <span class="mono">@_xferNewOwner[..12]...</span> to address book?</span>
+                    <input type="text" class="form-control form-control-sm" style="width:150px"
+                           @bind="_saveContactLabel" placeholder="Label" />
+                    <button class="btn btn-sm btn-outline-primary" @onclick="SaveNewContact">Save</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _dismissSaveContact = true">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            }
         }
         @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
     </div></div>
@@ -302,6 +317,18 @@ else
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; }
+    }
+
+    // Save to address book
+    private string? _saveContactLabel;
+    private bool _dismissSaveContact;
+
+    private void SaveNewContact()
+    {
+        if (string.IsNullOrWhiteSpace(_saveContactLabel) || string.IsNullOrEmpty(_xferNewOwner)) return;
+        try { Vault.AddContact(_saveContactLabel, _xferNewOwner.Trim()); } catch { }
+        _dismissSaveContact = true;
+        _saveContactLabel = null;
     }
 
     private async Task ExecuteSwap()

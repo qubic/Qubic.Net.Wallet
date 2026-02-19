@@ -5,6 +5,7 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
+@inject VaultService Vault
 
 <h4>Send to Many</h4>
 <p class="text-muted">Send QU to up to 25 recipients in a single transaction (QUTIL SendToManyV1).</p>
@@ -31,9 +32,9 @@ else
                         var idx = i;
                         <div class="row g-2 mb-1">
                             <div class="col-7">
-                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_recipients[idx].Identity)"
-                                       placeholder="Identity (60 chars)"
-                                       @bind="_recipients[idx].Identity" @bind:event="oninput" />
+                                <AddressInput Value="@_recipients[idx].Identity"
+                                              ValueChanged="(v) => _recipients[idx].Identity = v"
+                                              Placeholder="Identity (60 chars)" />
                             </div>
                             <div class="col-3">
                                 <input type="number" class="form-control form-control-sm" placeholder="Amount"
@@ -48,7 +49,7 @@ else
                         </div>
                     }
 
-                    <div class="d-flex gap-2 mt-2">
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
                         @if (_recipients.Count < 25)
                         {
                             <button class="btn btn-sm btn-outline-secondary" @onclick="AddRecipient">+ Add Recipient</button>
@@ -56,7 +57,43 @@ else
                         <button class="btn btn-sm btn-outline-primary" @onclick="() => _showImport = !_showImport">
                             @(_showImport ? "Hide Import" : "Import from Text")
                         </button>
+                        @if (Vault.IsUnlocked)
+                        {
+                            <span class="text-muted">|</span>
+                            @if (Vault.Templates.Count > 0)
+                            {
+                                <select class="form-select form-select-sm" style="width:auto;min-width:140px" @bind="_selectedTemplate">
+                                    <option value="">-- Template --</option>
+                                    @foreach (var t in Vault.Templates)
+                                    {
+                                        <option value="@t.Name">@t.Name (@t.Recipients.Count)</option>
+                                    }
+                                </select>
+                                <button class="btn btn-sm btn-outline-primary" disabled="@(string.IsNullOrEmpty(_selectedTemplate))" @onclick="LoadTemplate">Load</button>
+                                <button class="btn btn-sm btn-outline-secondary" disabled="@(string.IsNullOrEmpty(_selectedTemplate) || RecipientsWithAddress.Count() == 0)" @onclick="OverwriteTemplate">Overwrite</button>
+                                <button class="btn btn-sm btn-outline-danger" disabled="@(string.IsNullOrEmpty(_selectedTemplate))" @onclick="DeleteTemplate">Delete</button>
+                            }
+                            @if (!_showSaveAs)
+                            {
+                                <button class="btn btn-sm btn-outline-success" disabled="@(RecipientsWithAddress.Count() == 0)" @onclick="() => _showSaveAs = true">
+                                    <i class="bi bi-save me-1"></i>Save As
+                                </button>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control form-control-sm" style="width:150px"
+                                       @bind="_saveAsName" @onkeydown="OnSaveAsKey" placeholder="Template name" />
+                                <button class="btn btn-sm btn-success" @onclick="SaveAsTemplate">Save</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => { _showSaveAs = false; _saveAsName = null; _templateError = null; }">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            }
+                        }
                     </div>
+                    @if (_templateError != null)
+                    {
+                        <div class="text-danger small mt-1">@_templateError</div>
+                    }
 
                     @if (_showImport)
                     {
@@ -124,6 +161,22 @@ else
                                 <a href="/history">Transaction History</a>
                             </div>
                         </div>
+                        @if (Vault.IsUnlocked)
+                        {
+                            @foreach (var r in _unknownRecipients)
+                            {
+                                <div class="alert alert-info mt-2 py-2 d-flex align-items-center gap-2 flex-wrap">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span class="small">Save <span class="mono">@r.Identity[..12]...</span> to address book?</span>
+                                    <input type="text" class="form-control form-control-sm" style="width:150px"
+                                           @bind="r.Label" placeholder="Label" />
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => SaveRecipientContact(r)">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _unknownRecipients.Remove(r)">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
                     }
                     @if (_error != null)
                     {
@@ -148,6 +201,90 @@ else
     private string? _importText;
     private string? _importError;
     private bool _disposed;
+
+    // Save to address book
+    private class UnknownRecipient { public string Identity { get; set; } = ""; public string? Label { get; set; } }
+    private readonly List<UnknownRecipient> _unknownRecipients = [];
+
+    private void SaveRecipientContact(UnknownRecipient r)
+    {
+        if (string.IsNullOrWhiteSpace(r.Label)) return;
+        try { Vault.AddContact(r.Label, r.Identity.Trim()); } catch { }
+        _unknownRecipients.Remove(r);
+    }
+
+    // Templates
+    private string? _selectedTemplate;
+    private bool _showSaveAs;
+    private string? _saveAsName;
+    private string? _templateError;
+
+    private IEnumerable<Recipient> RecipientsWithAddress =>
+        _recipients.Where(r => !string.IsNullOrWhiteSpace(r.Identity));
+
+    private void LoadTemplate()
+    {
+        _templateError = null;
+        if (string.IsNullOrEmpty(_selectedTemplate)) return;
+        var template = Vault.Templates.FirstOrDefault(t => t.Name == _selectedTemplate);
+        if (template == null) { _templateError = "Template not found."; return; }
+
+        _recipients.Clear();
+        foreach (var r in template.Recipients)
+            _recipients.Add(new Recipient { Identity = r.Address, Amount = r.Amount });
+        if (_recipients.Count == 0) _recipients.Add(new());
+    }
+
+    private void SaveAsTemplate()
+    {
+        _templateError = null;
+        if (string.IsNullOrWhiteSpace(_saveAsName)) { _templateError = "Name is required."; return; }
+        var toSave = RecipientsWithAddress.ToList();
+        if (toSave.Count == 0) { _templateError = "Add at least one address."; return; }
+
+        try
+        {
+            Vault.AddTemplate(_saveAsName.Trim(), toSave.Select(r =>
+                new SendManyRecipient { Address = r.Identity.Trim(), Amount = r.Amount }).ToList());
+            _selectedTemplate = _saveAsName.Trim();
+            _showSaveAs = false;
+            _saveAsName = null;
+        }
+        catch (Exception ex) { _templateError = ex.Message; }
+    }
+
+    private void OverwriteTemplate()
+    {
+        _templateError = null;
+        if (string.IsNullOrEmpty(_selectedTemplate)) return;
+        var toSave = RecipientsWithAddress.ToList();
+        if (toSave.Count == 0) { _templateError = "Add at least one address."; return; }
+
+        try
+        {
+            Vault.UpdateTemplate(_selectedTemplate, toSave.Select(r =>
+                new SendManyRecipient { Address = r.Identity.Trim(), Amount = r.Amount }).ToList());
+        }
+        catch (Exception ex) { _templateError = ex.Message; }
+    }
+
+    private void DeleteTemplate()
+    {
+        _templateError = null;
+        if (string.IsNullOrEmpty(_selectedTemplate)) return;
+        try
+        {
+            Vault.RemoveTemplate(_selectedTemplate);
+            _selectedTemplate = null;
+        }
+        catch (Exception ex) { _templateError = ex.Message; }
+    }
+
+    private void OnSaveAsKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") SaveAsTemplate();
+        else if (e.Key == "Escape") { _showSaveAs = false; _saveAsName = null; _templateError = null; }
+    }
 
     private IEnumerable<Recipient> ValidRecipients =>
         _recipients.Where(r => !string.IsNullOrWhiteSpace(r.Identity) && r.Amount > 0);
@@ -270,6 +407,14 @@ else
             var tx = Seed.CreateAndSignTransaction(dest, totalAmount, tick, payload);
             var result = await Backend.BroadcastTransactionAsync(tx);
             _result = result.TransactionId;
+
+            // Collect unknown recipients for address book prompt
+            _unknownRecipients.Clear();
+            if (Vault.IsUnlocked)
+            {
+                foreach (var r in valid.Where(r => !Vault.IsKnownAddress(r.Identity.Trim())))
+                    _unknownRecipients.Add(new UnknownRecipient { Identity = r.Identity.Trim() });
+            }
 
             TxTracker.Track(new TrackedTransaction
             {

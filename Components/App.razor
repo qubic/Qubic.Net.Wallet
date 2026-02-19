@@ -45,6 +45,32 @@
         window.getTheme = () => {
             return document.documentElement.getAttribute('data-bs-theme') || 'light';
         };
+        window.copyQrAsImage = async (containerId) => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            const svg = el.querySelector('svg');
+            if (!svg) return;
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const size = 512;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, size, size);
+            const img = new Image();
+            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = url;
+            });
+            ctx.drawImage(img, 0, 0, size, size);
+            URL.revokeObjectURL(url);
+            const pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+        };
     </script>
 </body>
 </html>
