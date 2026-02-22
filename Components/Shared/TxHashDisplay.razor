@@ -1,0 +1,42 @@
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrEmpty(Hash))
+{
+    <span class="mono small d-inline-flex align-items-center">
+        <a href="https://explorer.qubic.org/network/tx/@Hash" target="_blank" rel="noopener"
+           title="@Hash">@GetDisplayText()</a>
+        <button class="btn btn-link btn-sm p-0 ms-1 address-copy-btn"
+                @onclick="CopyHash" @onclick:stopPropagation="true"
+                title="Copy tx hash"><i class="bi @(_copied ? "bi-check-lg text-success" : "bi-clipboard")"></i></button>
+    </span>
+}
+
+@code {
+    private bool _copied;
+
+    /// <summary>Full transaction hash string.</summary>
+    [Parameter] public string? Hash { get; set; }
+
+    /// <summary>Number of characters to show before truncating. Default: 12.</summary>
+    [Parameter] public int TruncateChars { get; set; } = 12;
+
+    /// <summary>Whether to show the full hash without truncation.</summary>
+    [Parameter] public bool ShowFull { get; set; }
+
+    private string GetDisplayText()
+    {
+        if (string.IsNullOrEmpty(Hash)) return "";
+        if (ShowFull || Hash.Length <= TruncateChars + 3) return Hash;
+        return $"{Hash[..TruncateChars]}...";
+    }
+
+    private async Task CopyHash()
+    {
+        if (string.IsNullOrEmpty(Hash)) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Hash);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+    }
+}

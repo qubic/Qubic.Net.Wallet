@@ -94,7 +94,7 @@ else
                     @if (_result != null)
                     {
                         <div class="alert alert-success mt-3">
-                            Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                            Transaction broadcast! Tx ID: <TxHashDisplay Hash="@_result" ShowFull="true" />
                             <div class="mt-1"><a href="/history">View in Transaction History</a></div>
                         </div>
                         @if (Vault.IsUnlocked && !_dismissSaveContact && !string.IsNullOrEmpty(_destination) && !Vault.IsKnownAddress(_destination))

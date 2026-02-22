@@ -183,10 +183,7 @@
                                         break;
                                 }
                             </td>
-                            <td class="mono small" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                                title="@tx.Hash">
-                                <a href="https://explorer.qubic.org/network/tx/@tx.Hash" target="_blank" rel="noopener">@tx.Hash</a>
-                            </td>
+                            <td><TxHashDisplay Hash="@tx.Hash" /></td>
                             <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
                                 title="@tx.Description">@tx.Description</td>
                             <td class="mono">@tx.Amount.ToString("N0")</td>
@@ -207,10 +204,7 @@
                                         <table class="table table-sm table-borderless mb-0">
                                             <tr>
                                                 <td class="text-muted" style="width:120px">Tx ID</td>
-                                                <td class="mono">
-                                                    @tx.Hash
-                                                    <a href="https://explorer.qubic.org/network/tx/@tx.Hash" target="_blank" rel="noopener" class="ms-2 small">Explorer</a>
-                                                </td>
+                                                <td><TxHashDisplay Hash="@tx.Hash" ShowFull="true" /></td>
                                             </tr>
                                             <tr><td class="text-muted">Source</td><td><AddressDisplay Address="@tx.Source" /></td></tr>
                                             <tr><td class="text-muted">Destination</td><td><AddressDisplay Address="@tx.Destination" /></td></tr>
@@ -244,7 +238,7 @@
                                                 </button>
                                                 @if (_repeatResult == tx.Hash)
                                                 {
-                                                    <span class="text-success small ms-2">New tx broadcast! <a href="https://explorer.qubic.org/network/tx/@_repeatNewHash" target="_blank" rel="noopener">@_repeatNewHash?[..20]...</a></span>
+                                                    <span class="text-success small ms-2">New tx broadcast! <TxHashDisplay Hash="@_repeatNewHash" TruncateChars="20" /></span>
                                                 }
                                                 @if (_repeatError != null && _repeating != tx.Hash && _repeatErrorHash == tx.Hash)
                                                 {
@@ -309,10 +303,7 @@ else
                         <tr>
                             <td class="small text-nowrap">@FormatTimestamp(tx.TimestampMs)</td>
                             <td class="mono">@tx.Tick.ToString("N0")</td>
-                            <td class="mono small" style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                                title="@tx.Hash">
-                                <a href="https://explorer.qubic.org/network/tx/@tx.Hash" target="_blank" rel="noopener">@tx.Hash</a>
-                            </td>
+                            <td><TxHashDisplay Hash="@tx.Hash" /></td>
                             <td><AddressDisplay Address="@tx.Source" TruncateChars="6" /></td>
                             <td><AddressDisplay Address="@tx.Destination" TruncateChars="6" /></td>
                             <td class="mono">@long.Parse(tx.Amount).ToString("N0")</td>
@@ -334,7 +325,7 @@ else
                                 <td colspan="8">
                                     <div class="bg-body-secondary rounded p-3">
                                         <table class="table table-sm table-borderless mb-0">
-                                            <tr><td class="text-muted" style="width:120px">Tx Hash</td><td class="mono">@tx.Hash</td></tr>
+                                            <tr><td class="text-muted" style="width:120px">Tx Hash</td><td><TxHashDisplay Hash="@tx.Hash" ShowFull="true" /></td></tr>
                                             <tr><td class="text-muted">Source</td><td><AddressDisplay Address="@tx.Source" ShowFull="true" /></td></tr>
                                             <tr><td class="text-muted">Destination</td><td><AddressDisplay Address="@tx.Destination" ShowFull="true" /></td></tr>
                                             <tr><td class="text-muted">Amount</td><td>@long.Parse(tx.Amount).ToString("N0") QU</td></tr>

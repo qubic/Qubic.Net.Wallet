@@ -356,9 +356,8 @@ else if ((_myAskOrders != null && _myAskOrders.Count > 0) || (_myBidOrders != nu
                         @if (_actionResult != null)
                         {
                             <div class="alert alert-success mt-2 mb-0">
-                                Tx ID: <span class="mono">@_actionResult</span>
+                                Tx ID: <TxHashDisplay Hash="@_actionResult" ShowFull="true" />
                                 <div class="mt-1">
-                                    <a href="https://explorer.qubic.org/network/tx/@_actionResult" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
                                     <a href="/history">Transaction History</a>
                                 </div>
                             </div>

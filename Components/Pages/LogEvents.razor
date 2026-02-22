@@ -98,23 +98,17 @@ else
                             <td>
                                 @if (!string.IsNullOrEmpty(info.From))
                                 {
-                                    <AddressDisplay Address="@info.From" TruncateChars="6" ShowCopy="false" />
+                                    <AddressDisplay Address="@info.From" TruncateChars="6" ShowCopy="true" />
                                 }
                             </td>
                             <td>
                                 @if (!string.IsNullOrEmpty(info.To))
                                 {
-                                    <AddressDisplay Address="@info.To" TruncateChars="6" ShowCopy="false" />
+                                    <AddressDisplay Address="@info.To" TruncateChars="6" ShowCopy="true" />
                                 }
                             </td>
                             <td class="mono small">@info.AmountText</td>
-                            <td class="mono small" style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                                title="@log.TxHash">
-                                @if (!string.IsNullOrEmpty(log.TxHash))
-                                {
-                                    @log.TxHash[..12]@:...
-                                }
-                            </td>
+                            <td><TxHashDisplay Hash="@log.TxHash" /></td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary" @onclick="() => ToggleDetails(log.Epoch, log.LogId)">
                                     @(IsExpanded(log.Epoch, log.LogId) ? "Hide" : "Details")
@@ -147,7 +141,7 @@ else
                                             }
                                             @if (!string.IsNullOrEmpty(log.TxHash))
                                             {
-                                                <tr><td class="text-muted">Tx Hash</td><td class="mono">@log.TxHash</td></tr>
+                                                <tr><td class="text-muted">Tx Hash</td><td><TxHashDisplay Hash="@log.TxHash" ShowFull="true" /></td></tr>
                                             }
                                             @if (!string.IsNullOrEmpty(log.LogDigest))
                                             {

@@ -213,9 +213,8 @@ else
             @if (_result != null)
             {
                 <div class="alert alert-success mt-3">
-                    Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                    Transaction broadcast! Tx ID: <TxHashDisplay Hash="@_result" ShowFull="true" />
                     <div class="mt-1">
-                        <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
                         <a href="/history">Transaction History</a>
                     </div>
                 </div>
