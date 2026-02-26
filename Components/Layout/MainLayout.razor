@@ -48,6 +48,10 @@
                         title="Copy full identity">
                     <i class="bi @(_identityCopied ? "bi-check-lg text-success" : "bi-clipboard")"></i>
                 </button>
+                @if (_navBalance != null)
+                {
+                    <span class="badge-qb-cyan mono">@_navBalance.Value.ToString("N0") QU</span>
+                }
                 <button class="btn btn-sm btn-qb-ghost" @onclick="LockVault"
                         title="Lock vault and clear seed">
                     <i class="bi bi-lock me-1"></i>Lock
@@ -82,6 +86,10 @@
                         title="Copy full identity">
                     <i class="bi @(_identityCopied ? "bi-check-lg text-success" : "bi-clipboard")"></i>
                 </button>
+                @if (_navBalance != null)
+                {
+                    <span class="badge-qb-cyan mono">@_navBalance.Value.ToString("N0") QU</span>
+                }
                 @if (!Vault.VaultConfigured)
                 {
                     <button class="btn btn-sm btn-qb-ghost" @onclick="() => _showSaveToVault = true"
@@ -306,6 +314,8 @@
     private bool _reconnecting;
     private bool _disposed;
     private bool _identityCopied;
+    private long? _navBalance;
+    private string? _navBalanceIdentity;
 
     // Vault state
     private string? _vaultPassword;
@@ -363,6 +373,9 @@
     private void OnTickChanged()
     {
         if (_disposed) return;
+        // Refresh balance every ~30 ticks (~30 seconds)
+        if (Seed.HasSeed && TickMonitor.Tick % 30 == 0)
+            _ = RefreshNavBalance();
         InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
     }
 
@@ -378,6 +391,22 @@
         InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
     }
 
+    // ── Balance ──
+
+    private async Task RefreshNavBalance()
+    {
+        if (!Seed.HasSeed || Seed.Identity == null) return;
+        var id = Seed.Identity.Value.ToString();
+        try
+        {
+            var bal = await Backend.GetBalanceAsync(Seed.Identity.Value);
+            _navBalance = bal.Amount;
+            _navBalanceIdentity = id;
+            if (!_disposed) await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
     // ── Seed (direct entry) ──
 
     private void SetSeed()
@@ -390,6 +419,7 @@
                 WalletStorage.SetSeed(_seedInput, Seed.Identity!.Value.ToString(), TickMonitor.Epoch);
                 TxTracker.SetEncryptionKey(_seedInput);
                 _seedInput = null;
+                _ = RefreshNavBalance();
             }
             catch { }
         }
@@ -401,6 +431,8 @@
         WalletStorage.ClearSeed();
         TxTracker.ClearEncryptionKey();
         _seedInput = null;
+        _navBalance = null;
+        _navBalanceIdentity = null;
         Nav.NavigateTo("/", forceLoad: false);
     }
 
@@ -472,6 +504,8 @@
             TxTracker.SetEncryptionKey(entry.Seed);
             Settings.SetCustom("vault_last_identity", entry.Identity);
             _seedInput = null;
+            _navBalance = null;
+            _ = RefreshNavBalance();
         }
         catch { }
     }

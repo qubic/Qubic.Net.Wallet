@@ -25,6 +25,7 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                         <tr>
                             <th>Lock Epoch</th>
                             <th>Locked Amount</th>
+                            <th title="Total QU locked by all users in this epoch">Epoch Total</th>
                             <th>Week</th>
                             <th>Remaining</th>
                             <th>Yield</th>
@@ -43,6 +44,9 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                             <tr>
                                 <td class="mono">@l.Epoch</td>
                                 <td class="mono">@l.Amount.ToString("N0") QU</td>
+                                <td class="mono text-muted" title="@(l.EpochCurrentLocked.ToString("N0")) QU currently locked (bonus: @(l.EpochBonusAmount.ToString("N0")) QU)">
+                                    @(l.EpochCurrentLocked > 0 ? $"{l.EpochCurrentLocked:N0}" : "—")
+                                </td>
                                 <td>@l.Week / 52</td>
                                 <td>@l.Remaining week@(l.Remaining != 1 ? "s" : "")</td>
                                 <td class="mono">@(l.Yield > 0 ? $"{yieldPct:F2}%" : "—")</td>
@@ -60,10 +64,22 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                                 <td>
                                     @if (Seed.HasSeed)
                                     {
-                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => UnlockFromSummary(lk)"
-                                                disabled="@(_sending)">
-                                            @(_unlockingEpoch == l.Epoch ? "Unlocking..." : "Unlock")
-                                        </button>
+                                        @if (_unlockingEpoch == l.Epoch && !_sending)
+                                        {
+                                            <div class="d-flex align-items-center gap-1">
+                                                <input type="text" inputmode="numeric" class="form-control form-control-sm" style="width:160px"
+                                                       value="@FormatQu((long)_unlockAmount)" @onchange="e => _unlockAmount = (ulong)ParseQu(e.Value?.ToString())" />
+                                                <button class="btn btn-sm btn-warning" @onclick="() => ConfirmUnlock(lk)">OK</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _unlockingEpoch = null">X</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-warning" @onclick="() => StartUnlock(lk)"
+                                                    disabled="@(_sending)">
+                                                @(_unlockingEpoch == l.Epoch && _sending ? "Unlocking..." : "Unlock")
+                                            </button>
+                                        }
                                     }
                                 </td>
                             </tr>
@@ -120,8 +136,17 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                 <p class="small text-muted">Lock QU into QEarn smart contract to earn staking rewards.</p>
                 <div class="mb-2">
                     <label class="form-label-sm">Amount to lock (QU)</label>
-                    <input type="number" class="form-control form-control-sm" min="1" @bind="_lockAmount" />
-                    <div class="form-text">The full amount will be locked. No additional fee.</div>
+                    <input type="text" inputmode="numeric" class="form-control form-control-sm"
+                           value="@FormatQu(_lockAmount)" @onchange="e => _lockAmount = ParseQu(e.Value?.ToString())" />
+                    @if (_balance != null)
+                    {
+                        <div class="d-flex gap-1 mt-1">
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetLockPercent(25)">25%</button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetLockPercent(50)">50%</button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetLockPercent(100)">100%</button>
+                        </div>
+                    }
+                    <div class="form-text">The full amount will be locked. No additional fee. Min 10,000,000 QU.</div>
                 </div>
                 <button class="btn btn-primary" @onclick="Lock" disabled="@(_sending || _lockAmount <= 0)">
                     @(_sending ? "Locking..." : "Lock")
@@ -233,12 +258,17 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
     private List<ActiveLock> _activeLocks = [];
     private (ulong fullyUnlocked, ulong fullyRewarded, ulong earlyUnlocked, ulong earlyRewarded)? _autoEndedStatus;
 
-    private record ActiveLock(uint Epoch, ulong Amount, int Week, int Remaining, ulong Yield, ulong EstReward);
+    private record ActiveLock(uint Epoch, ulong Amount, int Week, int Remaining, ulong Yield, ulong EstReward,
+        ulong EpochTotalLocked, ulong EpochCurrentLocked, ulong EpochBonusAmount);
+
+    // Balance
+    private long? _balance;
 
     // Lock
     private long _lockAmount;
     // Unlock (from summary)
     private uint? _unlockingEpoch;
+    private ulong _unlockAmount;
 
     // Query
     private int _queryFunc = 1;
@@ -256,6 +286,7 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
 
         if (Seed.HasSeed)
         {
+            _ = LoadBalance();
             _autoLoading = true;
             try
             {
@@ -319,17 +350,24 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                             }
                             catch { }
 
-                            ulong yield = 0;
+                            ulong yield = 0, epochTotalLocked = 0, epochCurrentLocked = 0, epochBonus = 0;
                             try
                             {
                                 if (yieldTasks.TryGetValue(lockEpoch, out var yt) && yt.Result.Length >= 40)
-                                    yield = Qubic.Core.Contracts.Qearn.GetLockInfoPerEpochOutput.FromBytes(yt.Result).Yield;
+                                {
+                                    var info = Qubic.Core.Contracts.Qearn.GetLockInfoPerEpochOutput.FromBytes(yt.Result);
+                                    yield = info.Yield;
+                                    epochTotalLocked = info.LockedAmount;
+                                    epochCurrentLocked = info.CurrentLockedAmount;
+                                    epochBonus = info.BonusAmount;
+                                }
                             }
                             catch { }
 
                             var estReward = yield > 0 ? amount * yield / 10_000_000 : 0;
                             var remaining = 52 - weeksLocked;
-                            _activeLocks.Add(new ActiveLock(lockEpoch, amount, weeksLocked, remaining, yield, estReward));
+                            _activeLocks.Add(new ActiveLock(lockEpoch, amount, weeksLocked, remaining, yield, estReward,
+                                epochTotalLocked, epochCurrentLocked, epochBonus));
                         }
                         _activeLocks = _activeLocks.OrderBy(l => l.Epoch).ToList();
                     }
@@ -365,6 +403,24 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
             RawData = Convert.ToHexString(tx.GetRawBytes()) });
     }
 
+    private async Task LoadBalance()
+    {
+        if (!Seed.HasSeed || Seed.Identity == null) return;
+        try
+        {
+            var bal = await Backend.GetBalanceAsync(Seed.Identity.Value);
+            _balance = bal.Amount;
+        }
+        catch { _balance = null; }
+    }
+
+    private void SetLockPercent(int pct)
+    {
+        if (_balance == null || _balance.Value <= 0) return;
+        _lockAmount = _balance.Value * pct / 100;
+        if (_lockAmount <= 0) _lockAmount = 1;
+    }
+
     private async Task Lock()
     {
         _sending = true; _error = null; _result = null;
@@ -379,24 +435,39 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
         finally { _sending = false; }
     }
 
-    private async Task UnlockFromSummary(ActiveLock lk)
+    private void StartUnlock(ActiveLock lk)
     {
+        _unlockingEpoch = lk.Epoch;
+        _unlockAmount = lk.Amount;
+        _error = null;
+        _result = null;
+    }
+
+    private async Task ConfirmUnlock(ActiveLock lk)
+    {
+        if (_unlockAmount <= 0 || _unlockAmount > lk.Amount)
+        {
+            _error = $"Amount must be between 1 and {lk.Amount:N0}.";
+            return;
+        }
+
         var earlyPct = GetEarlyUnlockRewardPercent(lk.Week);
+        var amountLabel = _unlockAmount == lk.Amount ? $"{lk.Amount:N0}" : $"{_unlockAmount:N0} of {lk.Amount:N0}";
         var msg = earlyPct >= 100
-            ? $"Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}?\n\nThis lock has reached full maturity — you will receive 100% of the reward."
-            : $"Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}?\n\nThis is an early unlock (week {lk.Week}/52). You will only receive {earlyPct}% of the full reward.";
+            ? $"Unlock {amountLabel} QU from epoch {lk.Epoch}?\n\nThis lock has reached full maturity — you will receive 100% of the reward."
+            : $"Unlock {amountLabel} QU from epoch {lk.Epoch}?\n\nThis is an early unlock (week {lk.Week}/52). You will only receive {earlyPct}% of the full reward.";
         if (!await JS.InvokeAsync<bool>("confirm", msg))
             return;
 
-        _sending = true; _error = null; _result = null; _unlockingEpoch = lk.Epoch;
+        _sending = true; _error = null; _result = null;
         try
         {
             var tick = await GetTick();
             var payload = new Qubic.Core.Contracts.Qearn.UnlockPayload
             {
-                Amount = lk.Amount, LockedEpoch = lk.Epoch
+                Amount = _unlockAmount, LockedEpoch = lk.Epoch
             };
-            await Broadcast(0, tick, payload, $"QEarn Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}");
+            await Broadcast(0, tick, payload, $"QEarn Unlock {_unlockAmount:N0} QU from epoch {lk.Epoch}");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; _unlockingEpoch = null; }
@@ -478,16 +549,16 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
         {
             case 1 when data.Length >= 40:
                 var li = Qubic.Core.Contracts.Qearn.GetLockInfoPerEpochOutput.FromBytes(data);
-                list.Add(new("Locked Amount", li.LockedAmount.ToString("N0")));
-                list.Add(new("Bonus Amount", li.BonusAmount.ToString("N0")));
-                list.Add(new("Current Locked Amount", li.CurrentLockedAmount.ToString("N0")));
-                list.Add(new("Current Bonus Amount", li.CurrentBonusAmount.ToString("N0")));
-                list.Add(new("Yield", li.Yield.ToString("N0")));
+                list.Add(new("Locked Amount", $"{li.LockedAmount:N0} QU"));
+                list.Add(new("Bonus Amount", $"{li.BonusAmount:N0} QU"));
+                list.Add(new("Current Locked Amount", $"{li.CurrentLockedAmount:N0} QU"));
+                list.Add(new("Current Bonus Amount", $"{li.CurrentBonusAmount:N0} QU"));
+                list.Add(new("Yield", $"{(double)li.Yield / 100_000:F3}%"));
                 break;
 
             case 2 when data.Length >= 8:
                 var ui = Qubic.Core.Contracts.Qearn.GetUserLockedInfoOutput.FromBytes(data);
-                list.Add(new("Locked Amount", ui.LockedAmount.ToString("N0")));
+                list.Add(new("Locked Amount", $"{ui.LockedAmount:N0} QU"));
                 break;
 
             case 3 when data.Length >= 4:
@@ -506,38 +577,38 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
 
             case 5 when data.Length >= 32:
                 var es = Qubic.Core.Contracts.Qearn.GetEndedStatusOutput.FromBytes(data);
-                list.Add(new("Fully Unlocked Amount", es.FullyUnlockedAmount.ToString("N0")));
-                list.Add(new("Fully Rewarded Amount", es.FullyRewardedAmount.ToString("N0")));
-                list.Add(new("Early Unlocked Amount", es.EarlyUnlockedAmount.ToString("N0")));
-                list.Add(new("Early Rewarded Amount", es.EarlyRewardedAmount.ToString("N0")));
+                list.Add(new("Fully Unlocked Amount", $"{es.FullyUnlockedAmount:N0} QU"));
+                list.Add(new("Fully Rewarded Amount", $"{es.FullyRewardedAmount:N0} QU"));
+                list.Add(new("Early Unlocked Amount", $"{es.EarlyUnlockedAmount:N0} QU"));
+                list.Add(new("Early Rewarded Amount", $"{es.EarlyRewardedAmount:N0} QU"));
                 break;
 
             case 6 when data.Length >= 32:
                 var sp = Qubic.Core.Contracts.Qearn.GetStatsPerEpochOutput.FromBytes(data);
-                list.Add(new("Early Unlocked Amount", sp.EarlyUnlockedAmount.ToString("N0")));
-                list.Add(new("Early Unlocked Percent", sp.EarlyUnlockedPercent.ToString("N0")));
-                list.Add(new("Total Locked Amount", sp.TotalLockedAmount.ToString("N0")));
-                list.Add(new("Average APY", sp.AverageAPY.ToString("N0")));
+                list.Add(new("Early Unlocked Amount", $"{sp.EarlyUnlockedAmount:N0} QU"));
+                list.Add(new("Early Unlocked %", $"{(double)sp.EarlyUnlockedPercent / 100:F2}%"));
+                list.Add(new("Total Locked Amount", $"{sp.TotalLockedAmount:N0} QU"));
+                list.Add(new("Average APY", $"{(double)sp.AverageAPY / 100_000:F3}%"));
                 break;
 
             case 7 when data.Length >= 48:
                 var bb = Qubic.Core.Contracts.Qearn.GetBurnedAndBoostedStatsOutput.FromBytes(data);
-                list.Add(new("Burned Amount", bb.BurnedAmount.ToString("N0")));
-                list.Add(new("Avg Burned %", bb.AverageBurnedPercent.ToString("N0")));
-                list.Add(new("Boosted Amount", bb.BoostedAmount.ToString("N0")));
-                list.Add(new("Avg Boosted %", bb.AverageBoostedPercent.ToString("N0")));
-                list.Add(new("Rewarded Amount", bb.RewardedAmount.ToString("N0")));
-                list.Add(new("Avg Rewarded %", bb.AverageRewardedPercent.ToString("N0")));
+                list.Add(new("Burned Amount", $"{bb.BurnedAmount:N0} QU"));
+                list.Add(new("Avg Burned %", $"{(double)bb.AverageBurnedPercent / 100_000:F3}%"));
+                list.Add(new("Boosted Amount", $"{bb.BoostedAmount:N0} QU"));
+                list.Add(new("Avg Boosted %", $"{(double)bb.AverageBoostedPercent / 100_000:F3}%"));
+                list.Add(new("Rewarded Amount", $"{bb.RewardedAmount:N0} QU"));
+                list.Add(new("Avg Rewarded %", $"{(double)bb.AverageRewardedPercent / 100_000:F3}%"));
                 break;
 
             case 8 when data.Length >= 48:
                 var bp = Qubic.Core.Contracts.Qearn.GetBurnedAndBoostedStatsPerEpochOutput.FromBytes(data);
-                list.Add(new("Burned Amount", bp.BurnedAmount.ToString("N0")));
-                list.Add(new("Burned %", bp.BurnedPercent.ToString("N0")));
-                list.Add(new("Boosted Amount", bp.BoostedAmount.ToString("N0")));
-                list.Add(new("Boosted %", bp.BoostedPercent.ToString("N0")));
-                list.Add(new("Rewarded Amount", bp.RewardedAmount.ToString("N0")));
-                list.Add(new("Rewarded %", bp.RewardedPercent.ToString("N0")));
+                list.Add(new("Burned Amount", $"{bp.BurnedAmount:N0} QU"));
+                list.Add(new("Burned %", $"{(double)bp.BurnedPercent / 100_000:F3}%"));
+                list.Add(new("Boosted Amount", $"{bp.BoostedAmount:N0} QU"));
+                list.Add(new("Boosted %", $"{(double)bp.BoostedPercent / 100_000:F3}%"));
+                list.Add(new("Rewarded Amount", $"{bp.RewardedAmount:N0} QU"));
+                list.Add(new("Rewarded %", $"{(double)bp.RewardedPercent / 100_000:F3}%"));
                 break;
 
             default:
@@ -546,4 +617,8 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
         }
         return list;
     }
+
+    private static string FormatQu(long amount) => amount > 0 ? amount.ToString("N0") : "";
+    private static long ParseQu(string? text) =>
+        long.TryParse(text?.Replace(",", "").Replace(" ", "").Trim(), out var v) && v >= 0 ? v : 0;
 }
