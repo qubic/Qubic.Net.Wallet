@@ -18,7 +18,8 @@
 <div class="d-flex flex-column vh-100">
     <nav class="qb-navbar">
         <a class="qb-logo" href="/">
-            <img src="qubic-logo.svg" alt="Qubic" />
+            <img src="qubic-logo.svg" alt="Qubic" class="logo-dark" />
+            <img src="qubic-logo-light.svg" alt="Qubic" class="logo-light" />
             <span>Wallet</span>
         </a>
         <div class="qb-controls">
@@ -347,6 +348,16 @@
 
         // Default vault path for save dialog
         _saveVaultPath = Path.Combine(Settings.StorageDirectory, "vault.dat");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var saved = Settings.GetCustom<string>("theme");
+            if (!string.IsNullOrEmpty(saved) && saved != "dark")
+                await JS.InvokeVoidAsync("setTheme", saved);
+        }
     }
 
     private void OnTickChanged()

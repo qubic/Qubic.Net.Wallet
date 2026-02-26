@@ -392,12 +392,62 @@ else if (_activeTab == "vault")
                 }
             </div>
 
+            @* ── Seeds ── *@
             <div class="card mb-3">
-                <div class="card-header">Vault Entries</div>
-                <div class="card-body">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-key-fill me-1"></i>Seeds</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showVaultAddSeed = !_showVaultAddSeed">
+                        <i class="bi @(_showVaultAddSeed ? "bi-x" : "bi-plus")"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    @if (_showVaultAddSeed)
+                    {
+                        <div class="p-3 border-bottom" style="border-color:var(--qb-border)!important">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Seed (55 characters)</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="@(_vaultAddSeedRevealed ? "text" : "password")" class="form-control form-control-sm mono"
+                                           @bind="_vaultAddSeed" placeholder="Enter or generate a 55-char seed..." />
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            @onclick="() => _vaultAddSeedRevealed = !_vaultAddSeedRevealed"
+                                            title="@(_vaultAddSeedRevealed ? "Hide" : "Reveal")">
+                                        <i class="bi @(_vaultAddSeedRevealed ? "bi-eye-slash" : "bi-eye")"></i>
+                                    </button>
+                                    <button class="btn btn-outline-primary" type="button" @onclick="GenerateVaultAddSeed"
+                                            title="Generate random seed">
+                                        <i class="bi bi-shuffle me-1"></i>Generate
+                                    </button>
+                                </div>
+                            </div>
+                            @if (_vaultAddSeedGenerated)
+                            {
+                                <div class="alert alert-danger small py-2 mb-2">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                    <strong>Write down this seed and store it safely!</strong> If you lose it, there is no recovery.
+                                </div>
+                            }
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Label</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="_vaultAddLabel" placeholder="e.g. Trading" />
+                            </div>
+                            @if (_vaultAddError != null)
+                            {
+                                <div class="text-danger small mb-2">@_vaultAddError</div>
+                            }
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" @onclick="AddVaultEntry">
+                                    <i class="bi bi-plus-circle me-1"></i>Add Entry
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showVaultAddSeed = false">Cancel</button>
+                            </div>
+                        </div>
+                    }
+
                     @if (Vault.Entries.Count == 0)
                     {
-                        <p class="text-muted small mb-0">No entries in vault.</p>
+                        <div class="text-center text-muted py-3 small">No seeds stored.</div>
                     }
                     else
                     {
@@ -454,53 +504,44 @@ else if (_activeTab == "vault")
                 </div>
             </div>
 
+            @* ── Address Book ── *@
             <div class="card mb-3">
-                <div class="card-header">Add Seed to Vault</div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <label class="form-label small">Seed (55 characters)</label>
-                        <div class="input-group input-group-sm">
-                            <input type="@(_vaultAddSeedRevealed ? "text" : "password")" class="form-control form-control-sm mono"
-                                   @bind="_vaultAddSeed" placeholder="Enter or generate a 55-char seed..." />
-                            <button class="btn btn-outline-secondary" type="button"
-                                    @onclick="() => _vaultAddSeedRevealed = !_vaultAddSeedRevealed"
-                                    title="@(_vaultAddSeedRevealed ? "Hide" : "Reveal")">
-                                <i class="bi @(_vaultAddSeedRevealed ? "bi-eye-slash" : "bi-eye")"></i>
-                            </button>
-                            <button class="btn btn-outline-primary" type="button" @onclick="GenerateVaultAddSeed"
-                                    title="Generate random seed">
-                                <i class="bi bi-shuffle me-1"></i>Generate
-                            </button>
-                        </div>
-                    </div>
-                    @if (_vaultAddSeedGenerated)
-                    {
-                        <div class="alert alert-danger small py-2 mb-2">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                            <strong>Write down this seed and store it safely!</strong> If you lose it, there is no recovery.
-                        </div>
-                    }
-                    <div class="mb-2">
-                        <label class="form-label small">Label</label>
-                        <input type="text" class="form-control form-control-sm"
-                               @bind="_vaultAddLabel" placeholder="e.g. Trading" />
-                    </div>
-                    @if (_vaultAddError != null)
-                    {
-                        <div class="text-danger small mb-2">@_vaultAddError</div>
-                    }
-                    <button class="btn btn-primary btn-sm" @onclick="AddVaultEntry">
-                        <i class="bi bi-plus-circle me-1"></i>Add Entry
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-person-lines-fill me-1"></i>Address Book</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showVaultAddContact = !_showVaultAddContact">
+                        <i class="bi @(_showVaultAddContact ? "bi-x" : "bi-plus")"></i>
                     </button>
                 </div>
-            </div>
+                <div class="card-body p-0">
+                    @if (_showVaultAddContact)
+                    {
+                        <div class="p-3 border-bottom" style="border-color:var(--qb-border)!important">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Label</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="_contactAddLabel" placeholder="e.g. Exchange Hot Wallet" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Address (60-character identity)</label>
+                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_contactAddAddress)"
+                                       @bind="_contactAddAddress" @bind:event="oninput" placeholder="IDENTITY..." />
+                            </div>
+                            @if (_contactAddError != null)
+                            {
+                                <div class="text-danger small mb-2">@_contactAddError</div>
+                            }
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" @onclick="AddContact">
+                                    <i class="bi bi-plus-circle me-1"></i>Add Contact
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showVaultAddContact = false">Cancel</button>
+                            </div>
+                        </div>
+                    }
 
-            <div class="card mb-3">
-                <div class="card-header"><i class="bi bi-person-lines-fill me-1"></i>Address Book</div>
-                <div class="card-body">
                     @if (Vault.Contacts.Count == 0)
                     {
-                        <p class="text-muted small mb-0">No contacts in address book.</p>
+                        <div class="text-center text-muted py-3 small">No contacts in address book.</div>
                     }
                     else
                     {
@@ -557,85 +598,78 @@ else if (_activeTab == "vault")
                 </div>
             </div>
 
+            @* ── Vault Settings ── *@
             <div class="card mb-3">
-                <div class="card-header">Add Contact</div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <label class="form-label small">Label</label>
-                        <input type="text" class="form-control form-control-sm"
-                               @bind="_contactAddLabel" placeholder="e.g. Exchange Hot Wallet" />
+                <div class="card-header"><i class="bi bi-gear me-1"></i>Vault Settings</div>
+                <div class="card-body p-0">
+                    @* Change Password row *@
+                    <div class="d-flex align-items-center p-3 border-bottom" style="border-color:var(--qb-border)!important;cursor:pointer"
+                         @onclick="() => _showVaultChangePassword = !_showVaultChangePassword">
+                        <i class="bi bi-key me-2" style="color:var(--qb-accent-cyan)"></i>
+                        <span class="flex-grow-1 small fw-bold">Change Password</span>
+                        <i class="bi @(_showVaultChangePassword ? "bi-chevron-down" : "bi-chevron-right") text-muted" style="font-size:0.75rem"></i>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small">Address (60-character identity)</label>
-                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_contactAddAddress)"
-                               @bind="_contactAddAddress" @bind:event="oninput" placeholder="IDENTITY..." />
-                    </div>
-                    @if (_contactAddError != null)
+                    @if (_showVaultChangePassword)
                     {
-                        <div class="text-danger small mb-2">@_contactAddError</div>
-                    }
-                    <button class="btn btn-primary btn-sm" @onclick="AddContact">
-                        <i class="bi bi-plus-circle me-1"></i>Add Contact
-                    </button>
-                </div>
-            </div>
-
-            <div class="card mb-3">
-                <div class="card-header">Change Vault Password</div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <label class="form-label small">Current Password</label>
-                        <input type="password" class="form-control form-control-sm"
-                               @bind="_vaultOldPassword" />
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small">New Password</label>
-                        <input type="password" class="form-control form-control-sm"
-                               @bind="_vaultNewPassword" />
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small">Confirm New Password</label>
-                        <input type="password" class="form-control form-control-sm"
-                               @bind="_vaultNewPasswordConfirm" />
-                    </div>
-                    @if (_vaultPasswordChangeError != null)
-                    {
-                        <div class="text-danger small mb-2">@_vaultPasswordChangeError</div>
-                    }
-                    @if (_vaultPasswordChanged)
-                    {
-                        <div class="text-success small mb-2"><i class="bi bi-check-circle me-1"></i>Password changed successfully.</div>
-                    }
-                    <button class="btn btn-outline-primary btn-sm" @onclick="ChangeVaultPassword">
-                        <i class="bi bi-key me-1"></i>Change Password
-                    </button>
-                </div>
-            </div>
-
-            <div class="card border-danger">
-                <div class="card-header text-danger">Danger Zone</div>
-                <div class="card-body">
-                    <p class="small text-muted mb-2">
-                        Permanently delete the vault file and all stored entries. This cannot be undone.
-                    </p>
-                    @if (!_confirmDeleteVault)
-                    {
-                        <button class="btn btn-outline-danger btn-sm" @onclick="() => _confirmDeleteVault = true">
-                            <i class="bi bi-trash me-1"></i>Delete Vault
-                        </button>
-                    }
-                    else
-                    {
-                        <div class="alert alert-danger py-2 mb-2">
-                            <strong>Are you sure?</strong> This will permanently delete your vault and all stored seeds.
+                        <div class="p-3 border-bottom" style="border-color:var(--qb-border)!important;background:var(--qb-bg-card-alt)">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Current Password</label>
+                                <input type="password" class="form-control form-control-sm"
+                                       @bind="_vaultOldPassword" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">New Password</label>
+                                <input type="password" class="form-control form-control-sm"
+                                       @bind="_vaultNewPassword" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Confirm New Password</label>
+                                <input type="password" class="form-control form-control-sm"
+                                       @bind="_vaultNewPasswordConfirm" />
+                            </div>
+                            @if (_vaultPasswordChangeError != null)
+                            {
+                                <div class="text-danger small mb-2">@_vaultPasswordChangeError</div>
+                            }
+                            @if (_vaultPasswordChanged)
+                            {
+                                <div class="text-success small mb-2"><i class="bi bi-check-circle me-1"></i>Password changed successfully.</div>
+                            }
+                            <button class="btn btn-outline-primary btn-sm" @onclick="ChangeVaultPassword">
+                                <i class="bi bi-key me-1"></i>Change Password
+                            </button>
                         </div>
-                        <button class="btn btn-danger btn-sm me-2" @onclick="DeleteVault">
-                            <i class="bi bi-exclamation-triangle me-1"></i>Yes, Delete Vault
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmDeleteVault = false">
-                            Cancel
-                        </button>
                     }
+
+                    @* Delete Vault row *@
+                    <div class="p-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <span class="small fw-bold text-danger"><i class="bi bi-trash me-1"></i>Delete Vault</span>
+                                <div class="text-muted" style="font-size:0.75rem">Permanently delete the vault file and all stored entries.</div>
+                            </div>
+                            @if (!_confirmDeleteVault)
+                            {
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => _confirmDeleteVault = true">
+                                    Delete
+                                </button>
+                            }
+                        </div>
+                        @if (_confirmDeleteVault)
+                        {
+                            <div class="alert alert-danger py-2 mt-2 mb-2">
+                                <strong>Are you sure?</strong> This will permanently delete your vault and all stored seeds.
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-danger btn-sm" @onclick="DeleteVault">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>Yes, Delete Vault
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmDeleteVault = false">
+                                    Cancel
+                                </button>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         }
@@ -803,11 +837,15 @@ else if (_activeTab == "vault")
     private string? _vaultOpenError;
     private string? _moveVaultError;
 
+    private bool _showVaultAddSeed;
     private string? _vaultAddSeed;
     private string? _vaultAddLabel;
     private string? _vaultAddError;
     private bool _vaultAddSeedRevealed;
     private bool _vaultAddSeedGenerated;
+
+    private bool _showVaultAddContact;
+    private bool _showVaultChangePassword;
 
     private string? _renamingIdentity;
     private string _renameLabel = "";
@@ -920,6 +958,7 @@ else if (_activeTab == "vault")
             Vault.AddEntry(_vaultAddLabel, _vaultAddSeed);
             _vaultAddSeed = null; _vaultAddLabel = null;
             _vaultAddSeedRevealed = false; _vaultAddSeedGenerated = false;
+            _showVaultAddSeed = false;
         }
         catch (Exception ex) { _vaultAddError = ex.Message; }
     }
@@ -962,6 +1001,7 @@ else if (_activeTab == "vault")
             Vault.ChangePassword(_vaultOldPassword!, _vaultNewPassword!);
             _vaultOldPassword = null; _vaultNewPassword = null; _vaultNewPasswordConfirm = null;
             _vaultPasswordChanged = true;
+            _showVaultChangePassword = false;
         }
         catch (Exception ex) { _vaultPasswordChangeError = ex.Message; }
     }
@@ -997,6 +1037,7 @@ else if (_activeTab == "vault")
         {
             Vault.AddContact(_contactAddLabel, _contactAddAddress!.Trim());
             _contactAddLabel = null; _contactAddAddress = null;
+            _showVaultAddContact = false;
         }
         catch (Exception ex) { _contactAddError = ex.Message; }
     }
@@ -1020,4 +1061,5 @@ else if (_activeTab == "vault")
     }
 
     private void CancelContactRename() => _renamingContactAddr = null;
+
 }

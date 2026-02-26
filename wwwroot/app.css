@@ -39,6 +39,31 @@
     --qb-border-strong: rgba(35, 255, 255, 0.2);
 }
 
+/* ── Light Theme Tokens ── */
+[data-bs-theme="light"] {
+    --qb-bg-primary: #ffffff;
+    --qb-bg-secondary: #f4f5f7;
+    --qb-bg-card: #ffffff;
+    --qb-bg-card-alt: #f0f1f3;
+    --qb-bg-elevated: #e5e7eb;
+    --qb-accent-cyan: #0891b2;
+    --qb-accent-cyan-dim: rgba(8, 145, 178, 0.06);
+    --qb-accent-cyan-muted: #06b6d4;
+    --qb-accent-gold: #d97706;
+    --qb-accent-gold-hover: #b45309;
+    --qb-text-primary: #1a1a2e;
+    --qb-text-secondary: #4b5563;
+    --qb-text-muted: #9ca3af;
+    --qb-border: rgba(0, 0, 0, 0.09);
+    --qb-border-strong: rgba(0, 0, 0, 0.18);
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #1a1a2e;
+    --bs-card-bg: #ffffff;
+    --bs-card-border-color: rgba(0, 0, 0, 0.09);
+    --bs-link-color: #0891b2;
+    --bs-link-hover-color: #06b6d4;
+}
+
 /* ── Bootstrap Dark Theme Overrides ── */
 [data-bs-theme="dark"] {
     --bs-body-bg: var(--qb-bg-primary);
@@ -117,6 +142,11 @@ h1, h2, h3, h4, h5, h6 {
     height: 22px;
 }
 
+.qb-logo .logo-light { display: none; }
+[data-bs-theme="light"] .qb-logo .logo-dark { display: none; }
+[data-bs-theme="light"] .qb-logo .logo-light { display: inline; }
+[data-bs-theme="light"] .qb-navbar .qb-logo { color: var(--qb-text-primary); }
+
 .qb-navbar .qb-controls {
     display: flex;
     align-items: center;
@@ -145,7 +175,7 @@ h1, h2, h3, h4, h5, h6 {
 .qb-navbar .form-control:focus,
 .qb-navbar .form-select:focus {
     border-color: var(--qb-accent-cyan) !important;
-    box-shadow: 0 0 0 2px rgba(35, 255, 255, 0.1);
+    box-shadow: 0 0 0 2px var(--qb-accent-cyan-dim);
 }
 
 .qb-navbar .form-control::placeholder {
@@ -181,7 +211,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-qb-secondary:hover {
-    background: rgba(35, 255, 255, 0.1);
+    background: var(--qb-accent-cyan-dim);
     color: var(--qb-accent-cyan);
 }
 
@@ -198,7 +228,7 @@ h1, h2, h3, h4, h5, h6 {
 .btn-qb-ghost:hover {
     color: var(--qb-text-primary);
     border-color: var(--qb-border-strong);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--qb-bg-elevated);
 }
 
 .btn-qb-danger {
@@ -218,7 +248,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── Badges ── */
 .badge-qb-cyan {
-    background: rgba(35, 255, 255, 0.1);
+    background: var(--qb-accent-cyan-dim);
     color: var(--qb-accent-cyan);
     font-weight: 500;
     font-size: 0.75rem;
@@ -264,9 +294,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── Seed Warning Bar ── */
 .qb-seed-bar {
-    background: rgba(255, 222, 161, 0.08);
     color: var(--qb-accent-gold);
-    border-bottom: 1px solid rgba(255, 222, 161, 0.15);
+    border-bottom: 1px solid var(--qb-border);
     font-size: 0.78rem;
     padding: 0.3rem 0;
     text-align: center;
@@ -298,7 +327,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .qb-sidebar .nav-link.active {
-    background: rgba(35, 255, 255, 0.08);
+    background: var(--qb-accent-cyan-dim);
     color: var(--qb-accent-cyan);
     font-weight: 500;
 }
@@ -592,7 +621,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── Accent Card Header ── */
 .card-header-accent {
-    background: rgba(35, 255, 255, 0.12);
+    background: var(--qb-accent-cyan-dim);
     color: var(--qb-accent-cyan);
     border-bottom-color: var(--qb-border-strong);
 }
@@ -625,8 +654,51 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Main Content Area ── */
-[data-bs-theme="dark"] main {
+main {
     background: var(--qb-bg-primary);
+}
+
+/* ── Light Theme Overrides ── */
+[data-bs-theme="light"] .card {
+    background: var(--qb-bg-card);
+    border: 1px solid var(--qb-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-bs-theme="light"] .card:hover {
+    border-color: var(--qb-border-strong);
+}
+
+[data-bs-theme="light"] .card-header {
+    background: var(--qb-bg-card-alt);
+    border-bottom: 1px solid var(--qb-border);
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+[data-bs-theme="light"] .qb-seed-bar {
+    background: rgba(217, 119, 6, 0.06);
+}
+
+[data-bs-theme="dark"] .qb-seed-bar {
+    background: rgba(255, 222, 161, 0.08);
+}
+
+[data-bs-theme="light"] .table th {
+    color: var(--qb-text-muted);
+    border-color: var(--qb-border);
+}
+
+[data-bs-theme="light"] .table td {
+    border-color: var(--qb-border);
+}
+
+[data-bs-theme="light"] .form-control:focus,
+[data-bs-theme="light"] .form-select:focus {
+    border-color: var(--qb-accent-cyan);
+    box-shadow: 0 0 0 2px var(--qb-accent-cyan-dim);
 }
 
 /* ── Responsive ── */
